@@ -35,8 +35,10 @@ A walk's stored fit also holds its run on every hub zone (`walk_zones`),
 in a file of its own beside the fit (`zones_path`), as it holds about 20
 times the fit's rows. `read_fit` leaves it alone; `stored_zones` reads
 the zone runs of the fits `load` used, for the consumers that need them.
-Where the store has no fit for the current key, `load` uses the newest
-stored fit of that pair and says so (`StoreStatus`).
+Where the current key has not been fitted yet (pending), `load` uses
+the newest good stored fit of that pair and labels it pending
+(`StoreStatus`). Where the current key's fit failed, the model has no
+forecast at that origin: no older fit stands in for it.
 `command` runs `bdbvhub fit-store`.
 """
 
@@ -84,6 +86,7 @@ from nowcastutils.hierarchy import is_zone
 
 __all__ = [
     "FIT_FUNCTIONS",
+    "FIT_LABELS",
     "KEY_PACKAGES",
     "KEY_SKIP",
     "SAMPLE_FREE",
@@ -105,6 +108,7 @@ __all__ = [
     "fit_code",
     "fit_files",
     "fit_key",
+    "label_origins",
     "load",
     "newest_fit",
     "origin_tasks",
@@ -882,8 +886,8 @@ def plan(
     A fit that failed is stored as failed and is not planned again until
     its inputs change, unless `retry_failed`.
     With `usable`, a pair is not lacking when `unpack` can use a fit
-    (`_choose`: the current key's, else the newest good one), as the
-    submission asks.
+    (`_choose`: the current key's, else, while it is pending, the newest
+    good one), as the submission asks.
 
     Parameters
     ----------
@@ -1117,11 +1121,11 @@ def unpack(
     """Write a stored candidate fit's directory for the submission.
 
     The fit of the current key is used when stored (same code and data,
-    same fit), else the newest stored fit of the model and origin
-    (`_choose`), chosen for each model on its own. Writes the fit
-    directory (`write_fit_dir`) and `UNPACKED_FILE`, which says which fit
-    it came from (its key and commit, and the current key) and at which
-    store commit.
+    same fit), else, while it is pending, the newest stored fit of the
+    model and origin (`_choose`), chosen for each model on its own.
+    Writes the fit directory (`write_fit_dir`) and `UNPACKED_FILE`,
+    which says which fit it came from (its key and commit, and the
+    current key) and at which store commit.
 
     Parameters
     ----------
@@ -1210,13 +1214,17 @@ class StoreStatus:
     key : str
         The key of the current code and data.
     used : str or None
-        The key of the fit loaded, None if the store has none.
+        The key of the fit loaded, None if none was: the store has none,
+        the current key's fit failed, or only current fits were asked for.
     commit : str or None
         The commit the loaded fit was made at.
     current : bool
         The loaded fit is the current key's.
     failed : bool
-        The current key's fit failed.
+        The current key's fit failed, so the model has no forecast here.
+    pending : bool
+        The current key has not been fitted yet; a fit in `used` is an
+        older one standing in until it is.
     """
 
     model: str
@@ -1226,12 +1234,18 @@ class StoreStatus:
     commit: str | None
     current: bool
     failed: bool
+    pending: bool = False
 
 
 def _choose(
     store: Path, model: str, origin: str, key: str
 ) -> tuple[StoredFit | None, bool]:
-    """Return the current key's fit, else the newest good one, and failure.
+    """Return the fit to use for a pair, and whether the current key failed.
+
+    The current key's fit when it is stored and good. When it failed,
+    none: the model has no forecast here, and no fit of other code or
+    data stands in. When it has not been fitted yet (pending), the newest
+    good fit of the pair.
 
     Returns
     -------
@@ -1240,21 +1254,22 @@ def _choose(
     """
     found = [read_fit(p) for p in (store / model / origin).glob("*.json.gz")]
     current = [f for f in found if f.meta["key"] == key]
-    failed = bool(current) and current[0].meta["status"] != "ok"
-    if current and not failed:
-        return current[0], False
+    if current:
+        failed = current[0].meta["status"] != "ok"
+        return (None, True) if failed else (current[0], False)
     good = [f for f in found if f.meta["status"] == "ok"]
     if not good:
-        return None, failed
-    return max(good, key=lambda f: f.meta["fitted_at"]), failed
+        return None, False
+    return max(good, key=lambda f: f.meta["fitted_at"]), False
 
 
 def newest_fit(store: Path | str, keys: Keys, model: str) -> StoredFit | None:
     """Return the fit `load` uses at the newest origin that has one.
 
     At each origin of the model in `keys`, newest first, the fit of the
-    current key is used when stored and good, else the newest good fit of
-    older code (`_choose`).
+    current key is used when stored and good, else, while it is pending,
+    the newest good fit of older code (`_choose`). An origin whose
+    current fit failed is passed over.
 
     Parameters
     ----------
@@ -1285,8 +1300,13 @@ def load(
     results: Path | str = "results",
     min_horizon: int | None = None,
     max_horizon: int | None = None,
+    current_only: bool = False,
 ) -> list[StoreStatus]:
     """Write the stored fits where the backtest and the docs read them.
+
+    Each pair's fit is `_choose`'s: the current key's, none if it failed,
+    and while it is pending the newest good older fit, unless
+    `current_only`.
 
     Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
     `max_horizon`: a stored fit holds the submission's weeks, which start
@@ -1306,6 +1326,8 @@ def load(
         The results directory.
     min_horizon, max_horizon : int, optional
         The backtest's weeks (`[forecast]`). None keeps every week.
+    current_only : bool
+        Load only the current keys' fits: a pending pair loads none.
 
     Returns
     -------
@@ -1326,6 +1348,9 @@ def load(
         ::-1
     ]:
         chosen, failed = _choose(Path(store), model, origin, key)
+        pending = not failed and (chosen is None or chosen.meta["key"] != key)
+        if current_only and pending:
+            chosen = None
         if chosen is not None:
             # Each fit's forecasts are cut to the backtest's weeks and
             # compacted as read (`compact_forecasts`), as are its zone
@@ -1345,6 +1370,7 @@ def load(
                 None if chosen is None else chosen.meta["commit"],
                 chosen is not None and chosen.meta["key"] == key,
                 failed,
+                pending,
             )
         )
     for name, frames in (
@@ -1378,6 +1404,87 @@ def _used(
     ]
 
 
+FIT_LABELS: Final = {
+    "failed": "the fit for this code failed",
+    "pending": "not yet fitted for this code",
+}
+"""Why a stored model has no forecast at an origin (`label_origins`)."""
+
+
+def label_origins(
+    origins: pd.DataFrame, status: Sequence[Mapping[str, Any]]
+) -> pd.DataFrame:
+    """Say which stored fit each scored model at each origin came from.
+
+    Adds `fit` (`"current"`, `"pending"`: an older fit standing in for
+    one not made yet, or `"failed"`), `fit_key` and `fit_commit` from the
+    `load` record. A stored model with no fit loaded at an origin of the
+    table, and no row there, is listed with no forecast and why.
+
+    Parameters
+    ----------
+    origins : pandas.DataFrame
+        The release backtest's origins: `origin`, `model`, `status` and
+        `reason`, with any count columns.
+    status : sequence of mapping
+        The `load` record (`STATUS_FILE`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        The origins with the fit columns; rows not from the store keep
+        them empty.
+    """
+    out = origins.assign(
+        origin=origins["origin"].astype(str),
+        fit=None,
+        fit_key=None,
+        fit_commit=None,
+    )
+    scored = set(out["origin"])
+    added = []
+    for s in status:
+        origin = str(s["origin"])
+        if origin not in scored:
+            continue
+        label = (
+            "current"
+            if s.get("current")
+            else "failed"
+            if s.get("failed")
+            else "pending"
+        )
+        here = (out["model"] == s["model"]) & (out["origin"] == origin)
+        if not s.get("used"):
+            here &= out["status"] == "no forecast"
+        if here.any():
+            out.loc[here, ["fit", "fit_key", "fit_commit"]] = [
+                label,
+                s.get("used"),
+                s.get("commit"),
+            ]
+        elif (
+            not s.get("used")
+            and not (
+                (out["model"] == s["model"]) & (out["origin"] == origin)
+            ).any()
+        ):
+            added.append(
+                {
+                    "origin": origin,
+                    "model": s["model"],
+                    "status": "no forecast",
+                    "reason": FIT_LABELS[label],
+                    "fit": label,
+                }
+            )
+    if added:
+        out = pd.concat([out, pd.DataFrame(added)], ignore_index=True)
+    counts = [c for c in ("n_reported", "n_complete") if c in out]
+    out[counts] = out[counts].fillna(0).astype(int)
+    return out.sort_values("origin", kind="stable").reset_index(drop=True)
+
+
 def stored_zones(
     store: Path | str,
     results: Path | str,
@@ -1386,8 +1493,9 @@ def stored_zones(
 ) -> pd.DataFrame:
     """Return the walks' stored zone runs of the fits `load` used.
 
-    `load` chooses each pair's fit (`_choose`: the current key's, else
-    the newest good one) and records it in `STATUS_FILE`. The zone runs
+    `load` chooses each pair's fit (`_choose`: the current key's, else,
+    while it is pending, the newest good one) and records it in
+    `STATUS_FILE`. The zone runs
     of those fits are read only here, for the consumers that need them.
 
     Parameters
@@ -1604,7 +1712,8 @@ def command(args: argparse.Namespace) -> int:
     matrix (`--out`), with every current key (`--keys`) for pruning;
     `--origins` keeps only those origins.
     `fit` fits one model at one origin and writes it to `--store`.
-    `load` writes the stored fits into `--results`.
+    `load` writes the stored fits into `--results`; with
+    `--current-only`, only the current keys' fits.
     `unpack` writes the stored fit of `--model` at `--origin` into the
     fit directory `--out`, for the submission.
 
@@ -1704,12 +1813,20 @@ def command(args: argparse.Namespace) -> int:
             )
         return 0
     for s in load(
-        args.store, keys, args.results, config.min_horizon, config.max_horizon
+        args.store,
+        keys,
+        args.results,
+        config.min_horizon,
+        config.max_horizon,
+        current_only=args.current_only,
     ):
-        state = "current" if s.current else "not fitted for this code"
-        if s.used and not s.current:
-            state += f", older fit {s.used} used"
-        if s.failed:
-            state += ", the fit for this code failed"
+        if s.current:
+            state = "current"
+        elif s.failed:
+            state = "the fit for this code failed, no forecast"
+        else:
+            state = "pending, not fitted for this code"
+            if s.used:
+                state += f", older fit {s.used} used"
         print(f"{s.model} at {s.origin}: {state}.")
     return 0

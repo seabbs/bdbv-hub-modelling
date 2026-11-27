@@ -89,7 +89,10 @@ task bdbvhub:fit-store       # load the stored fits into results/
 ```
 
 `task bdbvhub:backtest` loads the store first.
-Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
+Where the current key has not been fitted yet, `load` uses the newest good stored fit of that model and origin and labels it pending.
+Where the current key's fit failed, the model has no forecast at that origin, and no older fit stands in.
+The stored backtests load only the current code's fits (`fit-store load --current-only`), so a fit not made yet is listed as pending, not scored.
+`nowcast-origins.csv` names the key and commit of the fit each stored model was scored from.
 Pages with fitted-model results list the commits of their fits and the fits not yet made.
 A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (`renewalbvd`).
 A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.
