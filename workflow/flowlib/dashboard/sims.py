@@ -174,7 +174,7 @@ CURVES = (
 )
 """Each simulation's curves (`flowlib.delay_structure.curves`)."""
 
-CACHE_VERSION = 4
+CACHE_VERSION = 5
 """The batch summaries' version: a cached summary of another is redone."""
 
 
@@ -585,6 +585,7 @@ def _detail(
                     "value": value,
                 }
             )
+    drawn = {str(k): v for k, v in row.iloc[0].items()} if not row.empty else {}
     order = {k: i for i, k in enumerate((*LAYER_ORDER, "other"))}
     listed.sort(key=lambda s: order.get(s["layer"], len(order)))
     latent = None
@@ -611,11 +612,8 @@ def _detail(
         "settings": listed,
         "latent": latent,
         "structure": _structure(rows),
-        "noise_drawn": ds.drawn_noise(
-            {str(k): v for k, v in row.iloc[0].items()}
-        )
-        if not row.empty
-        else None,
+        "noise_drawn": ds.drawn_noise(drawn) if drawn else None,
+        "ascertainment_drawn": ds.drawn_ascertainment(drawn) if drawn else None,
     }
 
 
@@ -630,8 +628,9 @@ def simulation(
     week of reference and week of delay, its settings with their layers,
     its infections, onsets and R where the batch kept them, its delay
     structure (`flowlib.delay_structure.structure`, each stratum's delays
-    week by week among it) and its drawn delay noise sds by layer
-    (`flowlib.delay_structure.drawn_noise`).
+    week by week among it), its drawn delay noise sds by layer
+    (`flowlib.delay_structure.drawn_noise`) and its drawn ascertainment
+    (`flowlib.delay_structure.drawn_ascertainment`).
     """
     m = _ID.match(oid)
     if not m:

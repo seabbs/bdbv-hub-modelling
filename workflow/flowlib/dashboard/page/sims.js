@@ -25,7 +25,8 @@ var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  counts_corr:"Mean delay with log daily count, correlation within strata",share1_counts_corr:"Share by day 1 with log daily count, correlation",
  burst_ratio:"Largest weekly first report over final count",withdrawn_share:"Share of final cases ever withdrawn",
  withdrawn_max:"Largest stratum's share ever withdrawn",noise_time:"Delay noise: share common to strata over time",
- noise_strata:"Delay noise: share fixed by stratum",noise_residual:"Delay noise: share by stratum and week"};
+ noise_strata:"Delay noise: share fixed by stratum",noise_residual:"Delay noise: share by stratum and week",
+ strata_count_corr:"Strata's log weekly counts, mean pairwise correlation",count_share_sd:"Sd of the strata's log shares of the weekly count"};
 // The data the simulations are read against (`delay_reference` in the
 // workflow, as reference.json names them): each drawn in the page's ink,
 // told apart by its dash.
@@ -338,7 +339,9 @@ function derived(){var box=$("derivedbody"),gl=groupLists();box.innerHTML="";
 // ---- the structure of the delays ------------------------------------------
 // Each delay summary split by the group-by factor as above, with the German
 // and BDBV values (refList) where the workflow has built them.
-var REFSTAT={delay:function(e){return e.structure.overall.mean},releases:function(e){return e.structure.releases.per_week}};
+// An entry without a structure (not built, or built before it had one)
+// has no values, rather than breaking the section.
+var REFSTAT={delay:function(e){return e.structure?e.structure.overall.mean:null},releases:function(e){return e.structure?e.structure.releases.per_week:null}};
 function refStat(k){return refsOf(function(e){return REFSTAT[k]?REFSTAT[k](e):e.scalars?e.scalars[k]:null})}
 function delays(){var d=S.data,box=$("delaysbody"),gl=groupLists();
  if(!d.derived||!d.derived.delay_time){box.innerHTML='<p class=mut>This source was summarised before these summaries; it is summarised again on the next refresh.</p>';$("delaysleg").innerHTML="";return}
@@ -356,7 +359,8 @@ function delays(){var d=S.data,box=$("delaysbody"),gl=groupLists();
  scalarPanels(box,[["delay"],["within7"],["within14"],["within28"],["delay_drift"],["delay_trend"],["dow_delay"],["strata_spread"],
   ["releases"],["gap"],["first_report"],["release_weekdays"],["wait"],["wait_share"],
   ["strata_corr"],["strata_corr_min"],["share7_sd"],["counts_slope"],["counts_corr"],["share1_counts_corr"],
-  ["burst_ratio",true],["withdrawn_share"],["withdrawn_max"],["noise_time"],["noise_strata"],["noise_residual"]],gl,refStat);
+  ["burst_ratio",true],["withdrawn_share"],["withdrawn_max"],["noise_time"],["noise_strata"],["noise_residual"],
+  ["strata_count_corr"],["count_share_sd"]],gl,refStat);
  curves.forEach(function(c){var o=Object.assign({refs:refsOf(function(e){return e.curves?e.curves[c[0]]:null})},c[4]);
   curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]}).filter(Boolean)},gl.list,gl.colour,o)});
  if(!built.length)box.insertAdjacentHTML("afterbegin",'<p class=mut style="grid-column:1/-1">No data to compare with on this machine yet: build the workflow rule <code>delay_reference</code>.</p>')}
@@ -411,7 +415,7 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
    return fs.length?"<b>"+l+"</b>: "+fs.map(function(k){return esc(level(k,i))}).join(", "):""}).filter(Boolean).join("; ")+".</p>":"";
  box.innerHTML='<h3>'+esc(j.id)+'</h3>'+head+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+
   '</div><div id=d-struct></div><h3 style="margin-top:10px">Settings by layer</h3><div class=plots3 id=d-set></div>';
- diveDelays(j.structure,j.noise_drawn);
+ diveDelays(j.structure,j.noise_drawn,j.ascertainment_drawn);
  // Strata: the eight largest each, the rest summed as "other", and the total.
  var names=Object.keys(j.strata),tot=function(n){return j.strata[n].reduce(function(a,b){return a+b},0)};
  names.sort(function(a,b){return tot(b)-tot(a)});
@@ -466,7 +470,7 @@ function strataPanel(el,rows){var shown=rows.filter(function(r){return r.mean!==
    '<circle cx='+sx(r.mean)+' cy='+y+' r=4 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
    '<rect x=0 y='+(y-rh/2)+' width='+W+' height='+rh+' fill=transparent></rect></g>')});
  el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>'}
-function diveDelays(st,drawn){var box=$("d-struct");
+function diveDelays(st,drawn,asc){var box=$("d-struct");
  if(!st){box.innerHTML="";return}
  var sc=function(e){return e&&e.scalars?e.scalars:{}},mine=st,wait=mine.releases.wait,mean=mine.overall.mean;
  var cmp=function(k,lab){var parts=refList().map(function(r){var v=sc(S.ref[r[0]])[k];return r[1]+" "+fmt(v)});
@@ -482,7 +486,7 @@ function diveDelays(st,drawn){var box=$("d-struct");
  var bs=mine.by_stratum;
  if(bs)cards.push(["dsm","Mean delay by stratum and reference week"],["ds7","Share reported by day 7, by stratum"],
   ["dcc","Mean delay against the log daily count, by week"],["dfr","First report over the final count, by stratum"],
-  ["dno","Delay noise by part"]);
+  ["dno","Delay noise by part"],["dlv","Weekly counts by stratum, over each stratum's mean"],["das","Ascertainment as drawn"]);
  box.innerHTML='<h3 style="margin-top:10px">Delay structure</h3>'+note+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+'</div>';
  var rw=weekSeries(mine.by_ref),lw=weekSeries(mine.by_rel),wk={dates:dayLabel,ylab:"Delay (days)",hover:defaultHover,ymin:0};
  lineChart($("d-dref"),Object.assign({series:rw},wk));$("l-dref").innerHTML=legendOf([rw[3],rw[2],Object.assign({},rw[1],{name:"10 and 90%"})]);
@@ -498,7 +502,20 @@ function diveDelays(st,drawn){var box=$("d-struct");
  $("l-dgap").innerHTML=legendOf(gp)+'<span class=mut>'+mine.releases.n+' releases, '+fmt(mine.releases.per_week)+' a week</span>';
  strataPanel($("d-dstr"),mine.strata);
  $("l-dstr").innerHTML='<span class=mut>Line 10 to 90%, tick median, dot mean; bold the total and parents. The largest 16.</span>';
- if(bs)strataWeeks(mine,drawn,cmp)}
+ if(bs){strataWeeks(mine,drawn,cmp);strataLevels(mine,asc,cmp)}}
+// Ascertainment is not told apart from infections by the counts alone:
+// each stratum's weekly counts over its mean, and what was drawn.
+function strataLevels(st,asc,cmp){var bs=st.by_stratum,x=bs.week.map(dayNum),lv=st.levels||{};
+ var ser=bs.strata.slice(0,MAXCOL).map(function(r,k){return {x:x,y:r.rel_count,colour:PAL[k],w:1.5,name:r.name}});
+ if(bs.strata.length>1)ser.push({x:x,y:bs.total.rel_count,colour:"var(--fg)",w:2.5,name:"all strata"});
+ lineChart($("d-dlv"),{series:ser,dates:dayLabel,hover:defaultHover,ylab:"Over the stratum's mean",ymin:0,hline:1});
+ $("l-dlv").innerHTML=legendOf(ser)+'<span class=mut>'+cmp("strata_count_corr","log counts correlate "+fmt(lv.corr))+"; "+
+  cmp("count_share_sd","sd of log shares "+fmt(lv.share_sd))+'</span>';
+ var keys=Object.keys(asc||{});
+ $("d-das").innerHTML=keys.length?'<table class=settings>'+keys.map(function(k){var parts=asc[k].split(";");
+  return "<tr><td>"+esc(k)+'</td><td title="'+esc(asc[k])+'">'+esc(parts.slice(0,6).join("; ")+(parts.length>6?" … ("+parts.length+")":""))+"</td></tr>"}).join("")+"</table>"
+  :"<p class=mut>No ascertainment settings in this simulation's batch.</p>";
+ $("l-das").innerHTML='<span class=mut>Factor levels and values per stratum as the simulator drew them.</span>'}
 // Each stratum's delays week by week (`by_stratum`), how they follow the
 // counts, the over-reporting bursts and the delay's noise by part.
 function strataWeeks(st,drawn,cmp){var bs=st.by_stratum,x=bs.week.map(dayNum),one=bs.strata.length<2;
