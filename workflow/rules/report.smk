@@ -346,7 +346,7 @@ rule hub_comparison:
         models=" ".join(config["hub_rounds"]["models"]),
     shell:
         "(rm -rf {params.out}/store && "
-        "uv run fit-store-branch fetch {params.out}/store && "
+        "uv run fit-store-artifact fetch {params.out}/store && "
         "BDBV_DATA_DIR={params.data} uv run bdbvhub fit-store load "
         "--data {params.data} --store {params.out}/store "
         "--results {params.out}/results --models {params.models} && "

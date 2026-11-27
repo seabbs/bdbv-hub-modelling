@@ -1,34 +1,41 @@
-"""The fit store branch (`bdbvhub.store.store`): guard, fetch and push.
+"""The fit store as GitHub Actions artifacts (`bdbvhub.store.store`).
 
-    fit-store-branch guard EVENT REF SCRATCH
+    fit-store-artifact guard EVENT REF SCRATCH
         print `true` if the run may write a store, `false` if it only
-        plans, and fail if SCRATCH is not a scratch branch name
-    fit-store-branch fetch DIR
-        copy the branch's files into DIR (empty if there is no branch),
-        with the commit fetched in DIR/.commit, and fail if the remote
-        cannot be read
-    fit-store-branch push DIR KEYS PLAN
-        add DIR's planned fits to the branch, prune it and push
-    fit-store-branch push-backtests BUNDLE COMMIT
-        store BUNDLE in backtests/, made at COMMIT, and push
-    fit-store-branch push-site BUNDLE COMMIT KEY
-        store BUNDLE in site/, made at COMMIT from inputs with hash KEY,
-        and push
+        plans, and fail if SCRATCH is not a scratch store name
+    fit-store-artifact fetch DIR [BUNDLE ...]
+        unpack the newest store into DIR (left empty if there is none),
+        with its version in DIR/.commit, and each BUNDLE (`backtests`,
+        `site`) into DIR/BUNDLE; fail if the artifacts cannot be read
+    fit-store-artifact merge DIR NEW KEYS PLAN
+        add NEW's planned fits to the store in DIR and prune it
+    fit-store-artifact latest
+        print the newest store's version (blank if there is none)
 
-A bundle is stored in parts, `latest.tar.gz.000`, `.001` and on, each
-below GitHub's file size limit; `cat <folder>/latest.tar.gz* | tar -xz`
-unpacks it.
+The store is the newest unexpired artifact named FIT_STORE (default
+`fit-store`) made by a run in this repository; for the main store, by a
+run on main. Each write fetches it, merges its fits and uploads the
+whole store again under the same name (`actions/upload-artifact`), so
+the newest artifact is the store. Its bundles are the artifacts
+`<FIT_STORE>-backtests` and `<FIT_STORE>-site`, each `latest.tar.gz`
+with `latest.json` beside it. Artifacts expire: a store that has
+expired reads as empty, so its fits are made again, and a missing
+bundle as not yet made.
+
+Until the first store artifact is uploaded, `fetch` reads the git
+branch of the store's name, which held the store before, so nothing is
+refitted; each bundle's parts there are joined into `latest.tar.gz`.
 
 KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
 PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
 them. Only planned files are copied, each fit with its zone run beside it
-(`<key>.zones.csv.gz`, a walk's). For each pair in KEYS the push keeps
+(`<key>.zones.csv.gz`, a walk's). For each pair in KEYS the merge keeps
 the current key's fit and the newest good fit of older code, and deletes
-the rest with their zone runs. FIT_STORE_BRANCH names the branch (default
-fit-store). Run in a checkout whose `origin` holds the branch.
+the rest with their zone runs.
 
-Standard library and git only, so a CI job with no forecast
-environment runs it as `python3 -I <this file> ...`.
+Standard library, `gh` and git only, so a CI job with no forecast
+environment runs it as `python3 -I <this file> ...` with GH_TOKEN set.
+GITHUB_REPOSITORY names the repository (default: `gh repo view`'s).
 """
 
 from __future__ import annotations
@@ -43,39 +50,37 @@ import sys
 import tarfile
 import tempfile
 import time
-from collections.abc import Callable, Sequence
+import zipfile
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+MAIN = "fit-store"
+"""The main store's name, written from main only."""
 
 SCRATCH_PREFIX = "fit-store-scratch"
-"""The prefix a scratch store branch must have."""
+"""The prefix a scratch store's name must have."""
 
-BOT = (
-    "github-actions[bot]",
-    "41898282+github-actions[bot]@users.noreply.github.com",
-)
-"""The name and email the store's commits are made as."""
+BUNDLES = ("backtests", "site")
+"""The bundles stored beside the fits, each its own artifact."""
 
 ZONES_SUFFIX = ".zones.csv.gz"
 """A fit's zone run beside it (`bdbvhub.store.store.ZONES_SUFFIX`)."""
 
-PART_BYTES = 50_000_000
-"""Most bytes in one part of a stored bundle: under GitHub's 100 MB file
-limit and its 50 MiB warning."""
-
-PUSH_TRIES = 5
-"""Times a push is tried, refetching the branch each time."""
+VERSION_FILE = ".commit"
+"""The fetched store's version (`bdbvhub.store.store.COMMIT_FILE`)."""
 
 
-def _branch() -> str:
-    return os.environ.get("FIT_STORE_BRANCH") or "fit-store"
+class StoreError(Exception):
+    """The artifacts could not be read."""
 
 
-def _git(
-    *args: str, cwd: Path | None = None, check: bool = True
-) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, check=check
-    )
+def _name() -> str:
+    return os.environ.get("FIT_STORE") or MAIN
+
+
+def _tries() -> int:
+    return int(os.environ.get("FIT_STORE_TRIES") or 3)
 
 
 def _error(message: str) -> int:
@@ -83,10 +88,14 @@ def _error(message: str) -> int:
     return 1
 
 
+def _warn(message: str) -> None:
+    print(f"::warning::{message}", file=sys.stderr)
+
+
 def guard(event: str, ref: str, scratch: str = "") -> int:
     """Print whether this run may write a store; fail on a bad SCRATCH."""
     if scratch and not scratch.startswith(SCRATCH_PREFIX):
-        return _error(f"store_branch must start with {SCRATCH_PREFIX}")
+        return _error(f"store must start with {SCRATCH_PREFIX}")
     if event == "pull_request":
         write = False
     else:
@@ -95,35 +104,160 @@ def guard(event: str, ref: str, scratch: str = "") -> int:
     return 0
 
 
-def _fetch_tip(branch: str) -> bool:
-    return (
-        _git(
-            "fetch", "-q", "--depth", "1", "origin", branch, check=False
-        ).returncode
-        == 0
+def _gh(*args: str, out: Any = subprocess.PIPE) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["gh", *args], stdout=out, stderr=subprocess.PIPE, check=False
     )
 
 
-def fetch(where: Path) -> int:
-    """Copy the branch's files into WHERE, with the commit in `.commit`."""
-    branch = _branch()
-    where.mkdir(parents=True, exist_ok=True)
-    # Exit 2 means the branch does not exist: an empty store, not an error.
-    found = _git(
-        "ls-remote", "-q", "--exit-code", "--heads", "origin", branch,
-        check=False,
+def _repo() -> str:
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if repo:
+        return repo
+    got = _gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
+    if got.returncode != 0:
+        raise StoreError("could not tell the repository; set GITHUB_REPOSITORY")
+    return got.stdout.decode().strip()
+
+
+def _trusted(art: dict[str, Any], store: str) -> bool:
+    """Whether ART may be read as STORE's: made here, on main for MAIN."""
+    run = art.get("workflow_run") or {}
+    here = run.get("head_repository_id") == run.get("repository_id")
+    if store.startswith(SCRATCH_PREFIX):
+        return here
+    return here and run.get("head_branch") == "main"
+
+
+def newest(repo: str, name: str, store: str) -> dict[str, Any] | None:
+    """Return the newest unexpired artifact NAME of STORE, or None."""
+    got = _gh("api", f"repos/{repo}/actions/artifacts?name={name}&per_page=100")
+    if got.returncode != 0:
+        raise StoreError(f"could not read the artifacts named {name}")
+    arts = [
+        a
+        for a in json.loads(got.stdout)["artifacts"]
+        if a["name"] == name and not a["expired"] and _trusted(a, store)
+    ]
+    return max(arts, key=lambda a: a["created_at"]) if arts else None
+
+
+def version(art: dict[str, Any]) -> str:
+    """Return ART's version: its digest, else its id."""
+    digest = art.get("digest") or ""
+    return digest.removeprefix("sha256:") or str(art["id"])
+
+
+def _download(repo: str, art: dict[str, Any], where: Path) -> bool:
+    with tempfile.TemporaryFile() as tmp:
+        got = _gh(
+            "api", f"repos/{repo}/actions/artifacts/{art['id']}/zip", out=tmp
+        )
+        if got.returncode != 0:
+            return False
+        tmp.seek(0)
+        with zipfile.ZipFile(tmp) as z:
+            z.extractall(where)
+    return True
+
+
+def _fetch_one(repo: str, name: str, store: str, where: Path) -> str | None:
+    """Unpack the newest artifact NAME into WHERE; return its version.
+
+    An artifact replaced while it downloads (a write in progress) is
+    looked up again.
+    """
+    for attempt in range(1, _tries() + 1):
+        try:
+            art = newest(repo, name, store)
+        except StoreError:
+            if attempt == _tries():
+                raise
+        else:
+            if art is None:
+                return None
+            if _download(repo, art, where):
+                return version(art)
+            if attempt == _tries():
+                raise StoreError(f"could not download the artifact {name}")
+        time.sleep(attempt * 5)
+    return None
+
+
+def _from_branch(store: str, where: Path) -> bool:
+    """Copy the git branch STORE into WHERE, if it exists, parts joined."""
+    found = subprocess.run(
+        ["git", "ls-remote", "-q", "--exit-code", "--heads", "origin", store],
+        capture_output=True, check=False,
     ).returncode  # fmt: skip
-    if found == 2:
-        return 0
     if found != 0:
-        return _error(f"could not read {branch} from origin")
-    if not _fetch_tip(branch):
-        return _error(f"could not fetch {branch}")
-    archive = _git("archive", "FETCH_HEAD").stdout
+        return False
+    fetched = subprocess.run(
+        ["git", "fetch", "-q", "--depth", "1", "origin", store],
+        capture_output=True, check=False,
+    )  # fmt: skip
+    if fetched.returncode != 0:
+        raise StoreError(f"could not fetch the branch {store}")
+    archive = subprocess.run(
+        ["git", "archive", "FETCH_HEAD"], capture_output=True, check=True
+    ).stdout
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(where, filter="data")
-    tip = _git("rev-parse", "FETCH_HEAD").stdout.decode()
-    (where / ".commit").write_text(tip)
+    for bundle in BUNDLES:
+        parts = sorted((where / bundle).glob("latest.tar.gz.*"))
+        if parts:
+            with (where / bundle / "latest.tar.gz").open("wb") as out:
+                for part in parts:
+                    out.write(part.read_bytes())
+                    part.unlink()
+    tip = subprocess.run(
+        ["git", "rev-parse", "FETCH_HEAD"], capture_output=True, check=True
+    ).stdout.decode()
+    (where / VERSION_FILE).write_text(tip)
+    print(f"Read the store from the branch {store}, as no artifact holds it.")
+    return True
+
+
+def fetch(where: Path, bundles: Sequence[str] = ()) -> int:
+    """Unpack the newest store into WHERE and each of BUNDLES beside it."""
+    store = _name()
+    where.mkdir(parents=True, exist_ok=True)
+    try:
+        repo = _repo()
+        found = _fetch_one(repo, store, store, where)
+        if found is not None:
+            (where / VERSION_FILE).write_text(found + "\n")
+            for bundle in BUNDLES:
+                shutil.rmtree(where / bundle, ignore_errors=True)
+        elif _from_branch(store, where):
+            for bundle in BUNDLES:
+                if bundle not in bundles:
+                    shutil.rmtree(where / bundle, ignore_errors=True)
+        else:
+            _warn(f"no store artifact {store}: the store is empty")
+        for bundle in bundles:
+            name = f"{store}-{bundle}"
+            tmp = Path(tempfile.mkdtemp(prefix="fit-store."))
+            if _fetch_one(repo, name, store, tmp) is None:
+                shutil.rmtree(tmp)
+                if not (where / bundle).is_dir():
+                    _warn(f"no artifact {name}: its results are not yet made")
+                continue
+            shutil.rmtree(where / bundle, ignore_errors=True)
+            shutil.move(tmp, where / bundle)
+    except StoreError as err:
+        return _error(str(err))
+    return 0
+
+
+def latest() -> int:
+    """Print the newest store's version, blank if there is none."""
+    store = _name()
+    try:
+        art = newest(_repo(), store, store)
+    except StoreError as err:
+        return _error(str(err))
+    print(version(art) if art else "")
     return 0
 
 
@@ -166,128 +300,19 @@ def prune(
     return stored
 
 
-def _commit(stage: Callable[[Path], str]) -> int:
-    """Stage files on the branch with STAGE, commit and push them.
-
-    STAGE changes a checkout of the branch's tip and returns the commit
-    message. A push that loses a race refetches and stages again. One the
-    remote refuses (`[remote rejected]`: a file over GitHub's size limit,
-    a rule) fails at once. A failed push shows git's reason.
-    """
-    branch = _branch()
-    orphan = f"{branch}-new"
-    for attempt in range(1, PUSH_TRIES + 1):
-        work = Path(tempfile.mkdtemp(prefix="fit-store."))
-        work.rmdir()
-        if _fetch_tip(branch):
-            _git("worktree", "add", "-q", "--detach", str(work), "FETCH_HEAD")
-        else:
-            _git("worktree", "add", "-q", "--detach", str(work))
-            _git("switch", "-q", "--orphan", orphan, cwd=work)
-        try:
-            msg = stage(work)
-            _git("add", "-A", cwd=work)
-            if (
-                _git(
-                    "diff", "--cached", "--quiet", cwd=work, check=False
-                ).returncode
-                == 0
-            ):
-                print("Nothing to store.")
-                return 0
-            _git(
-                "-c", f"user.name={BOT[0]}", "-c", f"user.email={BOT[1]}",
-                "commit", "-q", "-m", msg, cwd=work,
-            )  # fmt: skip
-            pushed = _git(
-                "push", "-q", "origin", f"HEAD:refs/heads/{branch}",
-                cwd=work, check=False,
-            )  # fmt: skip
-        finally:
-            _git("worktree", "remove", "--force", str(work), check=False)
-            _git("branch", "-q", "-D", orphan, check=False)
-        if pushed.returncode == 0:
-            print(msg)
-            return 0
-        reason = pushed.stderr.decode(errors="replace").strip()
-        print(reason, file=sys.stderr)
-        if "[remote rejected]" in reason:
-            break
-        if attempt < PUSH_TRIES:
-            time.sleep(attempt * 5)
-    return _error(f"could not push to {branch}")
-
-
-def push(new: Path, keys_file: Path, plan_file: Path) -> int:
-    """Add NEW's planned fits to the branch, prune it and push it."""
-    new, keys_file, plan_file = (
-        p.resolve() for p in (new, keys_file, plan_file)
-    )
+def merge(work: Path, new: Path, keys_file: Path, plan_file: Path) -> int:
+    """Add NEW's planned fits to the store in WORK and prune it."""
+    work.mkdir(parents=True, exist_ok=True)
     keys = json.loads(keys_file.read_text())
     plan = json.loads(plan_file.read_text())["include"]
-    return _commit(
-        lambda work: "Store " + " ".join(prune(work, new, keys, plan))
-    )
-
-
-def _put_bundle(bundle: Path, folder: Path) -> None:
-    """Store BUNDLE in FOLDER as parts of at most PART_BYTES, in order."""
-    folder.mkdir(exist_ok=True)
-    for old in folder.glob("latest.tar.gz*"):
-        old.unlink()
-    with bundle.open("rb") as src:
-        part = 0
-        while chunk := src.read(PART_BYTES):
-            (folder / f"latest.tar.gz.{part:03d}").write_bytes(chunk)
-            part += 1
-
-
-BACKTESTS = "backtests"
-"""The branch folder of the stored backtests, which `prune` never
-touches: `latest.tar.gz.*` (the parts of their results and outputs, as
-Pages unpacks them) and `latest.json` (the commit that made them)."""
-
-
-def push_backtests(bundle: Path, commit: str) -> int:
-    """Store BUNDLE as the branch's backtests, made at COMMIT."""
-    bundle = bundle.resolve()
-
-    def stage(work: Path) -> str:
-        folder = work / BACKTESTS
-        _put_bundle(bundle, folder)
-        meta = {"commit": commit}
-        (folder / "latest.json").write_text(json.dumps(meta) + "\n")
-        return f"Store the backtests of {commit}"
-
-    return _commit(stage)
-
-
-SITE = "site"
-"""The branch folder of the site's results (site-results.yml),
-which `prune` never touches: `latest.tar.gz.*` (the parts of the results
-and docs files Pages unpacks) and `latest.json` (the commit that made
-them and the hash of their inputs, so unchanged inputs are not made
-again)."""
-
-
-def push_site(bundle: Path, commit: str, key: str) -> int:
-    """Store BUNDLE as the branch's site results, made at COMMIT."""
-    bundle = bundle.resolve()
-
-    def stage(work: Path) -> str:
-        folder = work / SITE
-        _put_bundle(bundle, folder)
-        meta = {"commit": commit, "key": key}
-        (folder / "latest.json").write_text(json.dumps(meta) + "\n")
-        return f"Store the site results of {commit}"
-
-    return _commit(stage)
+    stored = prune(work, new, keys, plan)
+    print("Store " + " ".join(stored) if stored else "Nothing to store.")
+    return 0
 
 
 USAGE = (
-    "usage: fit-store-branch guard EVENT REF SCRATCH | fetch DIR"
-    " | push DIR KEYS PLAN | push-backtests BUNDLE COMMIT"
-    " | push-site BUNDLE COMMIT KEY"
+    "usage: fit-store-artifact guard EVENT REF SCRATCH"
+    " | fetch DIR [BUNDLE ...] | merge DIR NEW KEYS PLAN | latest"
 )
 
 
@@ -297,14 +322,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     action, rest = (args[0], args[1:]) if args else ("", [])
     if action == "guard" and len(rest) in (2, 3):
         return guard(*rest)
-    if action == "fetch" and len(rest) == 1:
-        return fetch(Path(rest[0]))
-    if action == "push" and len(rest) == 3:
-        return push(*(Path(r) for r in rest))
-    if action == "push-backtests" and len(rest) == 2:
-        return push_backtests(Path(rest[0]), rest[1])
-    if action == "push-site" and len(rest) == 3:
-        return push_site(Path(rest[0]), rest[1], rest[2])
+    if (
+        action == "fetch"
+        and len(rest) >= 1
+        and all(b in BUNDLES for b in rest[1:])
+    ):
+        return fetch(Path(rest[0]), rest[1:])
+    if action == "merge" and len(rest) == 4:
+        return merge(*(Path(r) for r in rest))
+    if action == "latest" and not rest:
+        return latest()
     print(USAGE, file=sys.stderr)
     return 2
 

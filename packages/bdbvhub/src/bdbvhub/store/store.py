@@ -203,7 +203,7 @@ a submission candidate whose fit directory holds no samples of its own,
 so `unpack` writes its stored forecasts there."""
 
 COMMIT_FILE: Final = ".commit"
-"""The store branch commit, written by `scripts/fit-store.sh fetch`."""
+"""The fetched store's version, written by `fit-store-artifact fetch`."""
 
 
 def stored_models() -> list[str]:
@@ -685,7 +685,7 @@ def store_path(store: Path | str, model: str, origin: str, key: str) -> Path:
     Parameters
     ----------
     store : pathlib.Path or str
-        The store root (a checkout of the `fit-store` branch).
+        The store root (as `fit-store-artifact fetch` unpacks it).
     model, origin, key : str
         The fit.
 

@@ -166,7 +166,7 @@ def test_fetch_unpacks_the_newest_store_made_on_main(
         expired=True, created="2026-11-06T00:00:00Z",
     )  # fmt: skip
     got = tmp_path / "got"
-    out = _run("fetch", str(got), env=env)
+    out = _run("fetch", str(got), cwd=tmp_path, env=env)
     assert out.returncode == 0, out.stderr
     assert _files(got) == [".commit", "m/o/new.json.gz"]
     # The store's version, which `fit-store unpack` reports.
@@ -183,7 +183,12 @@ def test_fetch_reads_a_scratch_store_from_any_branch(
         branch="feature",
     )  # fmt: skip
     got = tmp_path / "got"
-    out = _run("fetch", str(got), env={**env, "FIT_STORE": "fit-store-scratch-a"})
+    out = _run(
+        "fetch",
+        str(got),
+        cwd=tmp_path,
+        env={**env, "FIT_STORE": "fit-store-scratch-a"},
+    )
     assert out.returncode == 0, out.stderr
     assert _files(got) == [".commit", "m/o/scratch.json.gz"]
 
@@ -199,7 +204,7 @@ def test_fetch_adds_the_named_bundles_in_their_folders(
     )  # fmt: skip
     _serve(server, 3, "fit-store-site", {"latest.tar.gz": b"s"})
     got = tmp_path / "got"
-    out = _run("fetch", str(got), "backtests", env=env)
+    out = _run("fetch", str(got), "backtests", cwd=tmp_path, env=env)
     assert out.returncode == 0, out.stderr
     assert _files(got) == [
         ".commit",
@@ -217,7 +222,7 @@ def test_fetch_leaves_a_missing_or_expired_store_empty(
     server, env = gh
     _serve(server, 1, "fit-store", {"m/o/k.json.gz": b"x"}, expired=True)
     got = tmp_path / "got"
-    out = _run("fetch", str(got), "backtests", "site", env=env)
+    out = _run("fetch", str(got), "backtests", "site", cwd=tmp_path, env=env)
     assert out.returncode == 0, out.stderr
     assert _files(got) == []
     assert "::warning::" in out.stderr
@@ -232,7 +237,9 @@ def test_fetch_fails_when_the_artifacts_cannot_be_listed(
     server, env = gh
     (server / "fail").touch()
     got = tmp_path / "got"
-    out = _run("fetch", str(got), env={**env, "FIT_STORE_TRIES": "1"})
+    out = _run(
+        "fetch", str(got), cwd=tmp_path, env={**env, "FIT_STORE_TRIES": "1"}
+    )
     assert out.returncode != 0
     assert "could not read" in out.stderr
     assert not any(got.iterdir())
