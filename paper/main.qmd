@@ -67,19 +67,19 @@ Teams without the capacity to set up specialist models could also use them direc
 - **The gap.**
   - Infectious disease forecasting is being increasingly used to provide situational awareness for public health.
   - Both in infectious disease forecasting, and more widely, modern machine learning methods including neural networks are becoming increasingly popular.
-    In particular, foundation time series models which are neaural networks trained on many time series have been shown to outperform traditional methods in many settings.
+    In particular, foundation time series models which are neural networks trained on many time series have been shown to outperform traditional methods in many settings.
     However, these methods are not generally specifically designed to deal with, or to make use of, the biases and delays common to infectious disease surveillance data.
   - Nowcasting models have become increasingly popular as a method to make use of these reporting delays in order to improve forecasts of what will eventually be reported.
-  - Generally, these methods are either relatively simple [@hohle; @Johnson2025], complex and customised for a given setting [@epinowcast; @Wolkfram2023], or are developed in ad-hoc fashion for a given target [@bdbv_modeling_hub_2026].
+  - Generally, these methods are either relatively simple [@hohle; @Johnson2025], complex and customised for a given setting [@abbottepinowcast; @Wolffram2023], or are developed in ad-hoc fashion for a given target [@bdbv_modeling_hub_2026].
   - If these methods have forecasting support it is generally relatively limited or difficult to make performant without expert knowledge of the target and the reporting system.
-  - Methods that fused the frontier forecasting performance of foundation time-series models with the nowcasting performance of domain-specific methods without requiring specialisit knowledge to configure could improve infectious disease forecasts and more generally provide a case study for incorporating domain knowledge into foundation models.
+  - Methods that fused the frontier forecasting performance of foundation time-series models with the nowcasting performance of domain-specific methods without requiring specialist knowledge to configure could improve infectious disease forecasts and more generally provide a case study for incorporating domain knowledge into foundation models.
   - Key references: [@hohle; @Johnson2025; @reichCollaborativeHubsMaking2022].
 
 - **Context.** Foundation time series models and their use in infectious disease forecasting.
   - Time series foundation models forecast new series with no training on them.
   - They are typically developed using complex, high parameter neural networks, trained on many time series, and are able to learn general patterns in time series data.
   - Recent examples include Chronos-2 [@Ansari2025], TimesFM [@Das2024a] and Moirai [@Woo2024] which have all been shown to perform well on a wide range of forecasting tasks.
-  - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
+  - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) [@flusight_hub; @cramer22_unitedstatescovid; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
   - Most of the currently used foundation models come with tools that allow them to be fine-tuned on new data.
   - This is a process where the weights of the model are modified to better fit the new data, usually using Low-Rank Adaptation (LoRA) or similar methods, which allow the model to be adapted to new data without requiring full retraining.
   - Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
@@ -89,7 +89,7 @@ Teams without the capacity to set up specialist models could also use them direc
     One such change adds learned biases to the attention scores, so the model knows which series are related, such as a count and its reporting delays, or a place and the region that contains it [@Woo2024; @Yang2022].
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 
-- **Context 2** Nowcasting methods and avilable models
+- **Context 2** Nowcasting methods and available models
   - Nowcasting methods estimate what will eventually be reported for recent dates, using the reporting triangle of counts by reference date and reporting delay [@hohle; @Wolffram2023].
   - To use simulated data for fine-tuning, we need a method that can also act as a generative model of how outbreaks are reported.
   - Chain ladder methods scale up partial counts by the share historically reported at each delay [@Johnson2025].
@@ -118,7 +118,7 @@ Teams without the capacity to set up specialist models could also use them direc
     One of these used the posterior reproduction number estimates of BVDOutbreakSize, our model of the outbreak's size, to inform its own [@BVDOutbreakSize] (Supporting Information, *Renewal model*).
   - We gave the model the reporting triangle as one series per place and reporting delay.
     We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
-  - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
+  - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandemic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
   - We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data [@Johnson2025] (Supporting Information, *Baselines*).
     We also submitted it to the Ebola forecasting hub in real time.
   - We first evaluated these models on held-out simulations.
@@ -336,7 +336,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We implemented the methods in a set of Python packages in one repository, each documented with examples and tested for correctness [@placeholder].
+- We implemented the methods in a set of Python packages in one repository, each documented with examples and tested for correctness [@abbott_bdbv_hub_modelling_2026].
 - `nowcastrenewal` is our port of the epinowcast model to Python on top of PyRenew, with its simulator, the renewal forecasters and the BVDOutbreakSize inputs [@abbottepinowcast; @pyrenew; @BVDOutbreakSize].
 - `nowcastfoundation` holds the simulation grid, the Chronos-2 forecasters with the attention biases, and fine-tuning with LoRA and checkpoint scoring, built on PyTorch, chronos-forecasting and PEFT [@Ansari2025; @Hu2021].
 - `nowcastbaselines` holds the random walks, our JAX port of baselinenowcast and the copula that pairs places [@Johnson2025].
@@ -515,7 +515,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
     Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
   - We simulate and fine-tune on counts only.
-    Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
+    Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @macarthur_collaborative_2026; @johnsonBayesianGenerative2026].
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Comparison with foundation models and neural networks.**
   - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
