@@ -189,8 +189,10 @@ Teams without the capacity to set up specialist models could also use them direc
 - We simulated the data in five layers (Figure 1A; Supporting Information, *Synthetic data generation*).
 - In layer 1 we simulated infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
 - In layer 2 infections became reference events, such as symptom onsets, after a delay such as incubation, and we kept a share of them with negative binomial or Poisson noise.
+- This share, the ascertainment, can change over time, differ between strata and fall when counts are high.
 - In layer 3 these events were reported after a reporting delay that is fixed or changes over time, as in epinowcast's observation model.
-- In layer 4 we added the reporting system, with report days and weekday effects, half with patterns such as a weekend dip, backlogs, outages, revisions that can take a release above the final count, and how often data are released.
+- The delay can also differ and change between strata, lengthen or shorten with the number of cases, and vary by week and stratum.
+- In layer 4 we added the reporting system, with report days and weekday effects, half with patterns such as a weekend dip, backlogs, outages, revisions that can take a release above the final count, short bursts of over-reporting that are later withdrawn, and how often data are released.
 - In layer 5 we set the places and age groups, how they nest and interact, how settings vary between them, and whether totals are exact sums of their parts.
 - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
 - The workflow simulates from the grid's configuration and writes every summary and figure, so a change to the grid regenerates them.
