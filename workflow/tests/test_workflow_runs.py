@@ -22,7 +22,6 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
         "noslots",
         "nodelays",
         "realdata",
-        "realonly",
         "runb",
     ]
 
@@ -203,24 +202,28 @@ def test_the_runs_trainers_queue_in_the_config_s_order(tmp_path):
     assert max(got["a"]) < compute.TRAIN_PRIORITY + 1
 
 
-def test_the_real_data_run_is_run_a_with_the_german_blocks():
+MIXED = {"runs": {"mixed": {"real_training": "germany"}}}
+"""A run with German blocks mixed into Run A's simulations, which no
+committed run is any more; the machinery stays."""
+
+
+def test_a_mixed_run_is_run_a_with_the_german_blocks():
     cfg = runs.load_config()
+    cfg["runs"] = {"runa": {}, **MIXED["runs"]}
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    a, b = found["runa"].ft, found["realdata"].ft
+    a, b = found["runa"].ft, found["mixed"].ft
     assert (a["real_training"], b["real_training"]) == (None, "germany")
     assert {k: v for k, v in a.items() if k != "real_training"} == {
         k: v for k, v in b.items() if k != "real_training"
     }
-    blocks = "/data/runs/realdata/real-training.pkl"
-    assert f"--real-training {blocks}" in runs.trainer_options(
-        found["realdata"]
-    )
+    blocks = "/data/runs/mixed/real-training.pkl"
+    assert f"--real-training {blocks}" in runs.trainer_options(found["mixed"])
     assert "--real-training" not in runs.trainer_options(found["runa"])
 
 
-def test_the_real_data_run_cuts_its_german_blocks_before_training(tmp_path):
-    target = f"{tmp_path}/runs/realdata/real-training.pkl"
-    out = dry_run(tmp_path, target, quiet=False)
+def test_a_mixed_run_cuts_its_german_blocks_before_training(tmp_path):
+    target = f"{tmp_path}/runs/mixed/real-training.pkl"
+    out = dry_run(tmp_path, target, config=MIXED, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     assert "nowcastgermany.finetune_blocks" in out.stdout
     # The window comes from the German config, as the rule reads it.

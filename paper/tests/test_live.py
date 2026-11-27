@@ -159,7 +159,7 @@ def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
         (scores["run"] == "no-slots") & (scores["study"] != "ebola")
     ]
     parts = [
-        real.assign(run="realonly", checkpoint=ck, outbreaks=0, rel_wis=wis)
+        real.assign(run="realdata", checkpoint=ck, outbreaks=0, rel_wis=wis)
         for ck, wis in (("n125", 2.5), ("n1000", 2.2))
     ]
     return pd.concat([scores, *parts], ignore_index=True)
@@ -170,11 +170,12 @@ def test_a_run_on_real_data_alone_is_its_final_checkpoint() -> None:
     # drawn across the live run's checkpoints, a line to compare with.
     from paperpipe.evidence import COMPARISONS, comparison_rows
 
-    labels = COMPARISONS["realonly"][1]
+    labels = COMPARISONS["realdata"][1]
     out = comparison_rows(
-        _real_only(_scores()), "one-model", "realonly", labels
+        _real_only(_scores()), "one-model", "realdata", labels
     )
     real = out.loc[out["run"] == labels[1]]
+    assert labels[1] == "real data alone"
     assert not real.empty
     assert set(real["outbreaks"]) == {125, 1000}
     assert set(real["score"]) == {2.2}

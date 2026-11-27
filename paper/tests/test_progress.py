@@ -87,7 +87,7 @@ def test_a_run_on_real_data_alone_is_drawn_by_its_share_of_training() -> None:
         {"n100": "n500", "n200": "n1000"}
     )
     rows["outbreaks"] = 0
-    fig = progress_figure(_loss(), rows, _seven_day(), None, run="realonly")
+    fig = progress_figure(_loss(), rows, _seven_day(), None, run="realdata")
     german = [
         ax for ax in fig.get_axes() if ax.get_title().startswith("germany")
     ]
