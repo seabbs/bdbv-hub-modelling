@@ -33,10 +33,12 @@ def test_inputs_hold_no_release_after_the_cut():
 
 
 def test_release_counts_give_each_release_back():
+    # The daily releases are the health zones', which sum to the
+    # provinces' and so to the country's.
     daily, _ = fb.load_inputs(FIXTURE_DATA, fb.realdata_cut())
-    provinces = daily.loc[daily["location"].str.count("-") == 1]
-    counts = fb.release_counts(provinces)
-    for cutoff, rows in provinces.groupby("cutoff"):
+    assert (daily["location"].str.count("-") == 2).all()
+    counts = fb.release_counts(daily)
+    for cutoff, rows in daily.groupby("cutoff"):
         want = (rows["observed"] + rows["imputed"]).sum()
         got = counts.loc[counts["report_date"] <= cutoff, "count"].sum()
         assert got == want
@@ -48,15 +50,53 @@ def _late(block: dict, truth_until: str) -> np.ndarray:
     return block["context"][: block["n_targets"], late]
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("source", ["daily", "weekly"])
-def test_no_bdbv_truth_after_the_truth_date(source):
+def _blocks(source: str) -> list[dict]:
     cut = fb.realdata_cut()
     daily, delays = fb.load_inputs(FIXTURE_DATA, cut)
-    if source == "daily":
-        blocks = fb.daily_blocks(daily, cut.truth_until)
-    else:
-        blocks = fb.weekly_blocks(delays, cut.cutoff, cut.truth_until)
+    if source == "daily+rolling7":
+        return fb.daily_blocks(daily, cut.truth_until)
+    return fb.weekly_blocks(delays, cut.cutoff, cut.truth_until)
+
+
+@pytest.mark.slow
+def test_daily_blocks_are_the_forecasting_models_layout():
+    # As the fine-tuned model forecasts the hub: the daily releases with
+    # each place's 7-day rows, every level in one block (the country, its
+    # provinces and their zones), cut into the simulated blocks' views
+    # where a whole system is over the block limit.
+    blocks = _blocks("daily+rolling7")
+    assert blocks
+    for b in blocks:
+        assert b["source"] == "daily+rolling7"
+        assert len(b["places"]) > 1
+        assert b["context"].shape[0] <= fb.BLOCK_LIMIT
+        # Each target place has its daily row and its 7-day row.
+        assert b["n_targets"] == 2 * len(set(b["target_places"]))
+    levels = {lv for b in blocks for lv in b["levels"]}
+    assert levels == {"national", "intermediate", "leaf"}
+    whole = [b for b in blocks if b["view"] == "whole"]
+    assert whole
+    for b in whole:
+        zones = [p for p in b["places"] if p.count("-") == 2]
+        provinces = {z.rsplit("-", 1)[0] for z in zones}
+        assert set(b["places"]) == {"CD", *provinces, *zones}
+
+
+@pytest.mark.slow
+def test_weekly_blocks_hold_the_country_with_its_provinces():
+    blocks = _blocks("weekly")
+    assert blocks
+    for b in blocks:
+        assert b["places"][0] == "CD"
+        assert len(b["places"]) > 1
+        assert all(p.count("-") == 1 for p in b["places"][1:])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("source", ["daily+rolling7", "weekly"])
+def test_no_bdbv_truth_after_the_truth_date(source):
+    cut = fb.realdata_cut()
+    blocks = _blocks(source)
     assert blocks
     for b in blocks:
         assert set(BLOCK_KEYS) <= set(b)

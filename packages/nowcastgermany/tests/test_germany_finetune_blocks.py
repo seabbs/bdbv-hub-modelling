@@ -129,6 +129,7 @@ def test_the_realdata_window_is_the_development_half():
     assert (cuts[0], cuts[-1]) == ("2021-04-20", "2021-12-03")
     assert window.sources == ("daily+rolling7", "weekly")
     assert window.held_out_dates == 14
+    assert window.places == ("states", "ages")
 
 
 @pytest.mark.slow
@@ -140,11 +141,19 @@ def test_realdata_blocks_never_read_past_the_development_half():
     assert counts["report_date"].max() <= window.as_of
     cuts = ["2021-11-30", "2021-12-03"]
     blocks = fg.german_blocks(
-        counts, cuts, window.truth_until, sources=window.sources
+        counts,
+        cuts,
+        window.truth_until,
+        sources=window.sources,
+        places=window.places,
     )
     assert {b["source"] for b in blocks} == {"daily+rolling7", "weekly"}
     for b in blocks:
         assert b["data"] == "germany"
+        # Every level of a German task in one block, as the fine-tuned
+        # model forecasts it: Germany with its states, or with its ages.
+        assert b["places"][0] == "CD"
+        assert len(b["places"]) > 1
         assert b["truth_end"] <= window.truth_until < window.as_of
         lags = fg.LAGS if b["source"] == fg.SOURCE else fg.WEEKLY_LAGS
         assert b["lag"] in lags
