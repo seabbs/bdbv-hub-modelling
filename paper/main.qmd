@@ -318,7 +318,8 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Sensitivity analyses
 
 ::: {.callout-note title="Plan"}
-- We gave the random walk nowcast's point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning.
+- We gave the median of the random walk nowcast's draws to Chronos-2 as complete counts, with the draws as the nowcast's uncertainty, both zero-shot and fine-tuned, with no further fine-tuning.
+- Its 7-day sums up to the cut-off were the random walk nowcast's draws, and Chronos-2 saw their median.
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations.
 - We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
