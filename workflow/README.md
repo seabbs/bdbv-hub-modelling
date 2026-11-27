@@ -144,6 +144,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`). It never waits for the checkpoint's held-out losses.
+- `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
 - `ft_check_release`: a saved checkpoint's BDBV check page (`ft_check_page`), named by the hash in its settings (`<ck>/ft-check.done`). A fine-tuned checkpoint's BDBV check forecast waits for its release.
 - `release_held_out`: an offloaded checkpoint's held-out losses (`held-out.json`), uploaded to its release once scored (`<ck>/held-out-released.txt`).
 - `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `packages/nowcastfoundation/config/finetune.toml` pins.

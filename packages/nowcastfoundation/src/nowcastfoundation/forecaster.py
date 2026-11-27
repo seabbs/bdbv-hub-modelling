@@ -81,11 +81,12 @@ __all__ = [
     "FINETUNED_CONFIG",
     "FINETUNED_ENV",
     "FINETUNED_PREFIX",
-    "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "LAG_GUARD",
     "LAG_QUANTILE",
     "LAYOUTS",
+    "MAIN_FILE",
+    "MAIN_TAG",
     "MAX_LAG",
     "PERIODS",
     "REALDATA_PREFIX",
@@ -103,13 +104,13 @@ __all__ = [
     "finetuned_adapter",
     "finetuned_checkpoint",
     "finetuned_label",
-    "finetuned_releases",
     "group_key",
     "hub_triangle",
     "lag_count",
     "latest_spec",
     "layout_block",
     "local_checkpoint",
+    "main_release",
     "native_sampler",
     "prefetch",
     "realdata_pinned",
@@ -166,14 +167,20 @@ FINETUNED_URL: Final = (
 )
 """Where the fine-tuned checkpoints' releases are downloaded from."""
 
-FINETUNED_RELEASES: Final = (
-    "https://api.github.com/repos/seabbs/bdbv-hub-modelling/releases"
-)
-"""The repository's releases, listed to find the latest checkpoint."""
+MAIN_TAG: Final = "chronos-main"
+"""The release naming the main fine-tuning run's newest checkpoint, the
+one `"latest"` takes. The main run is the paper's `live_run`
+(paper/workflow/config.yaml); the workflow updates this release each
+time that run publishes a checkpoint (rule `promote_main`), and no other
+run touches it."""
+
+MAIN_FILE: Final = "main.json"
+"""`MAIN_TAG`'s asset: the main run's name and its newest released
+checkpoint's `spec`, `tag`, `hash` and `n_outbreaks`."""
 
 FINETUNED_PREFIX: Final = "chronos-ft"
-"""Tag prefix of the simulation-trained checkpoints' releases, the only
-ones `"latest"` takes."""
+"""Tag prefix of the simulation-trained checkpoints' releases without
+the series bias."""
 
 REALDATA_PREFIX: Final = "realdata-ft"
 """Tag prefix of the real-data checkpoints' releases."""
@@ -338,36 +345,45 @@ def _get(url: str) -> bytes:
     raise AssertionError("unreachable")
 
 
-def finetuned_releases() -> list[dict[str, Any]]:
-    """List the repository's releases from the GitHub API.
+def main_release() -> dict[str, Any]:
+    """Return the main fine-tuning run's newest checkpoint record.
+
+    Read from `MAIN_FILE` of the release `MAIN_TAG`. A newer release of
+    another run, such as an ablation, is never taken in its place.
 
     Returns
     -------
-    list of dict
-        Each release's `tag_name`, `published_at` and `draft`, among
-        others.
+    dict
+        `run`, `spec` and `tag`, with `hash` and `n_outbreaks`.
 
     Raises
     ------
     ConnectionError
         If GitHub cannot be reached.
+    LookupError
+        If no checkpoint of the main run is released yet.
+    ValueError
+        If the record's `tag` is not its `spec`'s release.
     """
-    out: list[dict[str, Any]] = []
-    for page in range(1, 11):
-        url = f"{FINETUNED_RELEASES}?per_page=100&page={page}"
-        try:
-            batch = json.loads(_get(url))
-        except (OSError, http.client.HTTPException) as err:
-            raise ConnectionError(
-                f"Cannot list the releases at {url} to find the fine-tuned "
-                f"checkpoint: {err!r}. Set GH_TOKEN or GITHUB_TOKEN to a "
-                "GitHub token (anonymous requests are rate limited), or "
-                f"set {FINETUNED_ENV} to a settings hash."
+    url = f"{FINETUNED_URL}/{MAIN_TAG}/{MAIN_FILE}"
+    try:
+        record: dict[str, Any] = json.loads(_get(url))
+    except (OSError, http.client.HTTPException) as err:
+        if _missing(err):
+            raise LookupError(
+                f"No checkpoint of the main fine-tuning run is released: "
+                f"the release {MAIN_TAG} has no {MAIN_FILE} ({url}). "
+                "Promote one with workflow/scripts/publish_checkpoint.py "
+                "--main (rule promote_main)."
             ) from err
-        out += batch
-        if len(batch) < 100:
-            break
-    return out
+        raise _unreachable(url, err) from err
+    spec = str(record.get("spec", ""))
+    if not spec or record.get("tag") != release_tag(spec):
+        raise ValueError(
+            f"{MAIN_FILE} of {MAIN_TAG} names tag {record.get('tag')!r}, "
+            f"not the release of checkpoint {spec!r}."
+        )
+    return record
 
 
 def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
@@ -403,9 +419,9 @@ def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
 def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
-    `"latest"` is the newest published checkpoint release by publish
-    date, `chronos-ft-*` or `chronos-slots-*`; releases of other prefixes,
-    such as `realdata-ft-*`, are never taken. The release's `SUMS_FILE`
+    `"latest"` is the main fine-tuning run's newest released checkpoint
+    (`latest_spec`); another run's release, such as an ablation's, or a
+    `realdata-ft-*` release, is never taken. The release's `SUMS_FILE`
     gives the SHA-256 of its adapter files. Each process resolves once.
 
     Parameters
@@ -424,7 +440,7 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     ConnectionError
         If GitHub cannot be reached. No cached checkpoint is used instead.
     LookupError
-        If there is no checkpoint release.
+        If no checkpoint of the main run is released (`main_release`).
     FileNotFoundError
         If the release has no `SUMS_FILE`.
     ValueError
@@ -613,42 +629,26 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
 
 
 def latest_spec() -> str:
-    """Return the spec of the newest released checkpoint, by publish date.
+    """Return the spec of the main fine-tuning run's newest checkpoint.
 
-    Over the `chronos-ft-*` and `chronos-slots-*` releases (`slots-<hash>`
-    for the latter); drafts and other prefixes are never taken.
+    The checkpoint `MAIN_TAG` names (`main_release`): `slots-<hash>` or a
+    settings hash. Never the newest release of any run.
 
     Raises
     ------
     ConnectionError
         If GitHub cannot be reached.
     LookupError
-        If there is no checkpoint release.
+        If no checkpoint of the main run is released.
     """
-    tags = sorted(
-        (r["published_at"], r["tag_name"])
-        for r in finetuned_releases()
-        if str(r["tag_name"]).startswith(
-            (f"{FINETUNED_PREFIX}-", f"{SLOTS_RELEASE_PREFIX}-")
-        )
-        and not r.get("draft")
-        and r.get("published_at")
-    )
-    if not tags:
-        raise LookupError(
-            "No chronos-ft-* or chronos-slots-* release holds a checkpoint."
-        )
-    newest = str(tags[-1][1])
-    if newest.startswith(f"{SLOTS_RELEASE_PREFIX}-"):
-        return SLOTS_PREFIX + newest.removeprefix(f"{SLOTS_RELEASE_PREFIX}-")
-    return newest.removeprefix(f"{FINETUNED_PREFIX}-")
+    return str(main_release()["spec"])
 
 
 def finetuned_label(path: Path | str = FINETUNED_CONFIG) -> str:
     """Return the spec of the checkpoint `finetuned_checkpoint` loads.
 
     Its name only (`slots-<hash>` or a settings hash), with `"latest"`
-    resolved from the release listing, no checksum read; a Hub or local
+    resolved from `MAIN_TAG` (`latest_spec`), no checksum read; a Hub or local
     source is resolved as `finetuned_checkpoint` does.
 
     Parameters
