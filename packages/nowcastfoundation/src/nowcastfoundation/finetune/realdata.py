@@ -5,22 +5,26 @@ The workflow's `realonly` run (workflow/config.yaml `runs`, `data:
 real`). It trains a LoRA adapter from base Chronos-2 on the German and
 BDBV real-data blocks (`nowcastgermany.finetune_blocks --realdata`,
 `nowcastbdbv.finetune_blocks`) with the simulation fine-tune's recipe
-(`finetune.stream`: its LoRA, series bias, optimiser, batches packed by
-size and the learning rate falling linearly to zero) over a fixed number
-of steps, Chronos-2's default 1,000, rather than over outbreaks. The
+(`finetune.stream`: its LoRA, series bias, optimiser and batches packed
+by size). It trains in passes over every training block, each pass
+shuffled with its own seed, with the learning rate falling linearly to
+zero over the passes. The passes are as many as give the main run's
+steps (`--target-steps`), at most `--max-passes` (`choose_passes`). The
 blocks of the last `--held-out-dates` German nowcast dates are held out
-and their loss is logged; they are not trained on.
+and their loss is logged; they are not trained on, and no checkpoint is
+chosen by it: the final one is reported.
 
     DEVICE=cuda uv run --group chronos finetune-real OUT \
         --blocks germany.pkl bdbv.pkl --prefixes 125 250 500 1000 \
         --until 125
 
-Each checkpoint `--until N` is saved in `OUT/n<N>` as the simulation
-runs' are (settings with its hash, adapter, `consumed.txt`), with the
-blocks it trained on in `blocks.txt`; the next resumes from the state
-kept with it (`--prev OUT/n<N>/state`). The workflow verifies, scores
-and releases them as it does the other runs' (`finetune-verify`,
-`publish`, here as `realdata-ft-<hash>`).
+Checkpoints are fractions of the whole training, in thousandths
+(`checkpoint_steps`: 1/8, 1/4, 1/2 and all). Each `--until N` is saved
+in `OUT/n<N>` as the simulation runs' are (settings with its hash,
+adapter, `consumed.txt`), with the blocks it trained on in `blocks.txt`;
+the next resumes from the state kept with it (`--prev OUT/n<N>/state`).
+The workflow verifies, scores and releases them as it does the other
+runs' (`finetune-verify`, `publish`, here as `realdata-ft-<hash>`).
 """
 
 from __future__ import annotations
@@ -59,17 +63,25 @@ CODE = (
     ft.TRAINER,
     "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
     "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
+    "packages/nowcastfoundation/src/nowcastfoundation/finetune/realtasks.py",
     "packages/nowcastgermany/src/nowcastgermany/finetune_blocks.py",
     "packages/nowcastbdbv/src/nowcastbdbv/finetune_blocks.py",
     "packages/nowcastfoundation/config/finetune.toml",
 )
 """Files a checkpoint depends on, hashed into its settings by path: the
-trainer, the simulation trainer whose recipe it shares, the block layout,
-the block cutters and the real-data cut (`[realdata_germany]`,
-`[realdata_bdbv]`)."""
+trainer, the simulation trainer whose recipe it shares, the block layout
+and the real-data blocks' layout, the block cutters and the real-data
+cut (`[realdata_germany]`, `[realdata_bdbv]`)."""
 
-STEPS = 1000
-"""Training steps: Chronos-2's default (`Chronos2Pipeline.fit`)."""
+TARGET_STEPS = 82040
+"""The main run's (Run A's) steps over its 4,800 simulations: its final
+checkpoint's settings (`chronos-slots-66a7a630d729`, n4800)."""
+
+MAX_PASSES = 20
+"""Most passes over the real-data blocks, however few steps a pass is."""
+
+WHOLE = 1000
+"""A checkpoint prefix of the whole training, in thousandths."""
 
 LOG_EVERY = 10
 """Steps between logged training losses."""
@@ -114,6 +126,40 @@ def split_held_out(
         else:
             train.append(b)
     return train, held
+
+
+def choose_passes(steps_per_pass: int, target: int, most: int) -> int:
+    """Return the passes whose steps come nearest `target`, 1 to `most`."""
+    return int(min(most, max(1, round(target / max(1, steps_per_pass)))))
+
+
+def pass_plans(
+    lengths: np.ndarray,
+    sizes: np.ndarray,
+    batch_size: int,
+    seed: int,
+    passes: int,
+) -> list[list[tuple[int, list[int]]]]:
+    """Return each pass's batches: every block once, shuffled per pass.
+
+    As a simulation chunk is packed (`chronos.plan_by_length`), each pass
+    with its own seed.
+    """
+    return [
+        ft.plan_by_length(
+            lengths,
+            sizes,
+            batch_size,
+            np.random.default_rng([seed, p]),
+            ft.MAX_SERIES,
+        )
+        for p in range(passes)
+    ]
+
+
+def checkpoint_steps(total: int, prefixes: Sequence[int]) -> dict[int, int]:
+    """Return each checkpoint's step: its thousandths of `total` steps."""
+    return {n: round(n * total / WHOLE) for n in prefixes}
 
 
 def check_until(until: int, prefixes: Sequence[int]) -> None:
@@ -253,7 +299,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
     parser.add_argument("--blocks", type=Path, nargs="+", required=True)
-    parser.add_argument("--prefixes", type=int, nargs="+", default=[STEPS])
+    parser.add_argument(
+        "--prefixes", type=int, nargs="+", default=[125, 250, 500, WHOLE]
+    )
+    parser.add_argument("--target-steps", type=int, default=TARGET_STEPS)
+    parser.add_argument("--max-passes", type=int, default=MAX_PASSES)
     parser.add_argument("--until", type=int, required=True)
     parser.add_argument("--prev", type=Path)
     parser.add_argument("--held-out-dates", type=int, default=14)
@@ -271,7 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Train the real-data checkpoint up to `--until` steps and save it."""
+    """Train the real-data checkpoint to checkpoint `--until` and save it."""
     import torch
     from chronos import Chronos2Pipeline
     from chronos.chronos2.dataset import DatasetMode
@@ -283,7 +333,6 @@ def main() -> None:
         check_until(args.until, prefixes)
     except ValueError as error:
         raise SystemExit(str(error)) from error
-    total = prefixes[-1]
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
     commit = fs.code_commit()
@@ -292,9 +341,17 @@ def main() -> None:
     train, held = split_held_out(every, {"germany": args.held_out_dates})
     ids = [block_id(b) for b in train]
     (out / BLOCKS_FILE).write_text("\n".join(ids) + "\n")
+    sizes = np.array([int(b["context"].shape[0]) for b in train])
+    lengths = np.array([b["prediction_length"] for b in train])
+    one = pass_plans(lengths, sizes, args.batch_size, args.seed, 1)[0]
+    passes = choose_passes(len(one), args.target_steps, args.max_passes)
+    plans = pass_plans(lengths, sizes, args.batch_size, args.seed, passes)
+    total = sum(len(plan) for plan in plans)
+    until = checkpoint_steps(total, prefixes)[args.until]
     log(
         f"{len(train)} training blocks, {len(held)} held out, on {device}; "
-        f"steps to {args.until} of {total}"
+        f"{passes} passes of about {len(one)} steps, {total} steps; "
+        f"checkpoint n{args.until} at step {until}"
     )
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
@@ -332,7 +389,11 @@ def main() -> None:
         },
         **fs.bias_settings(args.series_bias, args.bias_lr),
         "learning_rate": args.learning_rate,
-        "lr_decay": "linear to zero over the steps",
+        "lr_decay": "linear to zero over the passes",
+        "passes": passes,
+        "pass_steps": [len(plan) for plan in plans],
+        "target_steps": args.target_steps,
+        "max_passes": args.max_passes,
         "steps": total,
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
@@ -340,7 +401,7 @@ def main() -> None:
         "note": args.note,
     }
     live = out / "state"
-    resume_from(live, args.prev, args.until)
+    resume_from(live, args.prev, until)
     state = fs.load_state(live, model, optimiser)
     for group, base_lr in zip(
         optimiser.param_groups,
@@ -370,8 +431,6 @@ def main() -> None:
     data = fs.ByLength(
         train, args.batch_size, DatasetMode.TRAIN, args.series_bias
     )
-    sizes = np.array([int(b["context"].shape[0]) for b in train])
-    lengths = np.array([b["prediction_length"] for b in train])
 
     def backward(part: list[int], share: float) -> float:
         batch = data._build_batch(part)
@@ -389,12 +448,9 @@ def main() -> None:
 
     t0 = time.perf_counter()
     plan: list[tuple[int, list[int]]] = []
-    while state["step"] < args.until:
-        rng = np.random.default_rng([args.seed, state["epoch"]])
-        plan = ft.plan_by_length(
-            lengths, sizes, args.batch_size, rng, ft.MAX_SERIES
-        )
-        while state["position"] < len(plan) and state["step"] < args.until:
+    while state["step"] < until:
+        plan = plans[state["epoch"]]
+        while state["position"] < len(plan) and state["step"] < until:
             _, indices = plan[state["position"]]
             fs.set_learning_rates(optimiser, state["step"], total)
             optimiser.zero_grad()
@@ -429,8 +485,9 @@ def main() -> None:
     parts = fs.held_out_parts(model, held, args.batch_size)
     epochs = state["epoch"] + state["position"] / max(1, len(plan))
     settings = checkpoint_settings(
-        base, args.until, ft._sha256(where / "consumed.txt"), epochs
+        base, until, ft._sha256(where / "consumed.txt"), epochs
     )
+    settings["fraction"] = args.until / WHOLE
     start = state["start"]
     settings |= {
         "code_commit": commit,
@@ -445,7 +502,7 @@ def main() -> None:
     (where / "settings.json").write_text(json.dumps(settings, indent=1))
     state["history"].append(
         {
-            "step": args.until,
+            "step": until,
             "held_out_loss": parts["loss"],
             "hash": settings["hash"],
         }
