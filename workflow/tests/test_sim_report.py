@@ -325,6 +325,11 @@ def test_the_delay_structure_factors_are_in_the_layers():
         "delay_strata_noise",
         "delay_jitter",
         "bursts",
+        "ascertainment_change",
+        "ascertainment_change_strata",
+        "ascertainment_change_switch",
+        "ascertainment_counts",
+        "ascertainment_noise",
     ):
         assert name in factors
 
@@ -350,3 +355,19 @@ def test_the_strata_figure_draws_each_data_set_s_strata():
     assert len(fig.axes) == 2 * len(sr.STRATA_PANELS)
     sr.plt.close(fig)
     assert sr.strata_figure({}) is None
+
+
+def test_a_reference_without_a_structure_is_left_out_of_the_figures():
+    reference = _reference()
+    reference["bdbv"] = {"short": "BDBV", "label": "BDBV"}
+    structs = [
+        {"mean": 2.0, "scalars": reference["germany"]["scalars"],
+         "curves": reference["germany"]["curves"]}
+    ]  # fmt: skip
+    for fig in (
+        sr.curves_figure(structs, reference),
+        sr.scalars_figure(structs, reference),
+        sr.strata_figure(reference),
+    ):
+        assert fig is not None
+        sr.plt.close(fig)

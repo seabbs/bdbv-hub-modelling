@@ -785,6 +785,11 @@ def gallery(picks: list[tuple[str, pd.Series]], dirs: dict) -> str:
             f"max delay {o['max_delay_days']:.0f} d, "
             f"change {o['delay_change']}; "
             f"shocks {o.get('shocks')}; revisions {o['revisions']}; "
+            f"bursts {o.get('bursts')}; ascertainment "
+            f"{o.get('ascertainment_change')} "
+            f"({o.get('ascertainment_change_strata')}, counts "
+            f"{o.get('ascertainment_counts')}, noise "
+            f"{o.get('ascertainment_noise')}); "
             f"{o['reported']:.0f} cases"
         )
         parts.append(
@@ -852,6 +857,10 @@ LAYERS = [
             "incubation_family",
             "obs_strata",
             "observation_strata",
+            "ascertainment_change",
+            "ascertainment_change_switch",
+            "ascertainment_counts",
+            "ascertainment_noise",
         ],
     ),
     (
@@ -919,6 +928,7 @@ LAYERS = [
             "spread",
             "place_rt",
             "delay_change_strata",
+            "ascertainment_change_strata",
         ],
     ),
 ]
@@ -1248,6 +1258,8 @@ SCALARS = [
     ("noise_time", "Delay noise: share common to strata"),
     ("noise_strata", "Delay noise: share fixed by stratum"),
     ("noise_residual", "Delay noise: share by stratum and week"),
+    ("strata_count_corr", "Strata's log weekly counts (r)"),
+    ("count_share_sd", "Sd of strata's log shares of the count"),
 ]
 """The delay numbers the report compares: key and title."""
 
@@ -1300,7 +1312,7 @@ def curves_figure(structs: list[dict], reference: dict):
                     label="simulations, median")  # fmt: skip
         for name, (colour, ls) in REF_STYLES.items():
             entry = reference.get(name)
-            if not entry:
+            if not entry or not entry.get("curves"):
                 continue
             y = [np.nan if v is None else v for v in entry["curves"][key]]
             ax.plot(x, y, color=colour, ls=ls, lw=1.6,
@@ -1328,7 +1340,7 @@ def scalars_figure(structs: list[dict], reference: dict):
         ax.set_visible(False)
     for ax, (key, title) in zip(axes, SCALARS, strict=False):
         v = pd.Series(
-            [s["mean"] if key == "mean" else s["scalars"][key]
+            [s["mean"] if key == "mean" else s["scalars"].get(key)
              for s in structs], dtype=float,
         ).dropna()  # fmt: skip
         if len(v):
@@ -1337,12 +1349,12 @@ def scalars_figure(structs: list[dict], reference: dict):
         notes = []
         for name, (colour, ls) in REF_STYLES.items():
             entry = reference.get(name)
-            if not entry:
+            if not entry or not entry.get("structure"):
                 continue
             ref = (
                 entry["structure"]["overall"]["mean"]
                 if key == "mean"
-                else entry["scalars"].get(key)
+                else (entry.get("scalars") or {}).get(key)
             )
             if ref is None:
                 continue
@@ -1361,6 +1373,7 @@ STRATA_PANELS = [
     ("share7", "Share reported by day 7"),
     ("counts", "Mean delay against log daily count"),
     ("first_ratio", "First report over final count"),
+    ("rel_count", "Weekly count over the stratum's mean"),
 ]
 """The panels of each data set's strata, week by week: key and title."""
 
@@ -1369,8 +1382,9 @@ def strata_figure(reference: dict):
     """Return each data set's strata's delays week by week.
 
     A row per data set (`structure`'s `by_stratum`): each stratum's mean
-    delay, share by day 7 and first-report-to-final ratio by reference
-    week, and its weekly mean delay against its log daily count. None
+    delay, share by day 7, first-report-to-final ratio and count a day
+    over its mean by reference week, and its weekly mean delay against
+    its log daily count. None
     with no data set's strata.
     """
     sets = [
@@ -1381,7 +1395,7 @@ def strata_figure(reference: dict):
     if not sets:
         return None
     fig, axes = plt.subplots(
-        len(sets), len(STRATA_PANELS), figsize=(14, 3.2 * len(sets))
+        len(sets), len(STRATA_PANELS), figsize=(16, 3.2 * len(sets))
     )
     axes = np.atleast_2d(axes)
     for row, entry in zip(axes, sets, strict=True):
@@ -1401,7 +1415,7 @@ def strata_figure(reference: dict):
                 total = np.array(by["total"][key], dtype=float)
                 ax.plot(weeks, total, color=INK, lw=1.8)
                 ax.tick_params(axis="x", labelrotation=30, labelsize=6)
-            if key == "first_ratio":
+            if key in ("first_ratio", "rel_count"):
                 ax.axhline(1, color=MUTED, lw=0.8, ls=":")
             ax.set_title(f"{entry.get('short', entry['label'])}: {title}")
             _style(ax)
@@ -1433,7 +1447,11 @@ def delay_section(dirs: dict, reference: dict) -> str:
         "within strata, the first report over the final count (above 1 "
         "is over-reporting later withdrawn) and the share of the weekly "
         "log mean delay's variation common to strata, fixed by stratum "
-        "or by stratum and week.</p>"
+        "or by stratum and week. Ascertainment is not told apart from "
+        "infections by the counts alone, so each stratum's weekly count "
+        "over its mean is shown, with how the strata's counts correlate "
+        "and how much their shares move; the drawn ascertainment is in "
+        "the observation layer's factors and the gallery.</p>"
         + png(curves_figure(structs, reference))
         + png(scalars_figure(structs, reference))
         + (
