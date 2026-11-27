@@ -538,3 +538,14 @@ def test_figures_wait_when_no_shown_model_has_forecasts(tmp_path: Path) -> None:
     assert res.returncode == 0, res.stderr
     figures = tmp_path / "results" / "development" / "figures"
     assert (figures / "main" / "germany-nowcasts.png").is_file()
+
+
+def test_the_german_development_table_reads_the_fine_tuning_units() -> None:
+    # Our German development forecasts are the fine-tuning workflow's
+    # units, never a German backtest of their own.
+    text = (PAPER / "workflow" / "Snakefile").read_text()
+    start = text.index("rule germany_development:")
+    block = text[start : text.index("\n# ", start)]
+    assert "FLOW.germany_units()" in block
+    assert "{params.germany} units " in block
+    assert " backtest " not in block

@@ -32,10 +32,20 @@ def test_each_set_names_its_files_from_the_config() -> None:
         "pairing-germany.csv.gz",
         "pairing-germany-rho.csv.gz",
         "germany-forecasts.csv.gz",
+        "germany-units.csv.gz",
+        "germany-units.json",
     }
     # The development half's table only, never the held-out one.
     assert sets["germany"]["germany-forecasts.csv.gz"] == (
         f"{CONFIG['germany']['results']}/paper-forecasts.csv.gz"
+    )
+    # Our models' development forecasts from the fine-tuning workflow's
+    # units (`nowcastgermany units`), which Site results reads too.
+    assert sets["germany"]["germany-units.csv.gz"] == (
+        f"{CONFIG['germany']['results']}/forecasts.csv.gz"
+    )
+    assert sets["germany"]["germany-units.json"] == (
+        f"{CONFIG['germany']['results']}/units.json"
     )
     assert (
         sets["synthetic"]["synthetic-dev.csv.gz"]
@@ -107,6 +117,7 @@ def test_the_hash_follows_the_contents_not_the_paths(tmp_path: Path) -> None:
         pd.DataFrame({"study": ["synthetic"], "location": ["33800-0001"]}),
         pd.DataFrame({"seed": [33801]}),
         pd.DataFrame({"study": ["germany"], "origin_date": ["2022-03-01"]}),
+        pd.DataFrame({"study": ["germany"], "origin": ["2022-03-01"]}),
     ],
 )
 def test_held_out_rows_are_never_published(
@@ -183,6 +194,33 @@ def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
     assert "checkpoint_scores" in overlay["evidence"]
     # Sets with no release are left out, so their results stay pending.
     assert "synthetic" not in json.dumps(overlay)
+
+
+def test_fetch_takes_only_the_sets_asked_for(tmp_path: Path) -> None:
+    # Site results reads the German set alone, the paper's newest.
+    releases = [
+        {"tag_name": "paper-germany-aaa", "created_at": "2026-11-20T00:00:00Z"},
+        {"tag_name": "paper-germany-bbb", "created_at": "2026-11-24T00:00:00Z"},
+        {"tag_name": "paper-finetune-c", "created_at": "2026-11-25T00:00:00Z"},
+    ]
+    files = {
+        "germany-units.csv.gz": _write(
+            tmp_path / "h" / "u.csv", pd.DataFrame({"v": [1]})
+        )
+    }
+    asked = []
+
+    def download(tag: str, dest: Path) -> Path:
+        asked.append(tag)
+        return stored.bundle("germany", files, dest)
+
+    stored.fetch(tmp_path / "stored", releases, download, names=("germany",))
+    assert asked == ["paper-germany-bbb"]
+    assert (tmp_path / "stored" / "germany" / "germany-units.csv.gz").exists()
+    out = tmp_path / "cli"
+    args = ["fetch", str(out), "--overlay", str(tmp_path / "o.yml")]
+    parsed = stored.parser().parse_args([*args, "--set", "germany"])
+    assert parsed.set == ["germany"]
 
 
 def test_stored_outputs_stand_in_for_the_host_rules() -> None:
