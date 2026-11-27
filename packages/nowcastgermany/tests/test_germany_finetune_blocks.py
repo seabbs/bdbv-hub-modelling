@@ -126,52 +126,57 @@ def test_the_realdata_window_is_the_development_half():
     assert window.truth_delay == german["truth"]["delay"]
     assert window.truth_until == "2021-12-31"
     cuts = window.cuts()
+    # Every nowcast date with its truth by then, each cut once.
     assert (cuts[0], cuts[-1]) == ("2021-04-20", "2021-12-03")
-    assert window.sources == ("daily+rolling7", "weekly")
+    assert len(cuts) == len(set(cuts)) == 228
     assert window.held_out_dates == 14
-    assert window.places == ("states", "ages")
+
+
+def test_the_realdata_triangle_holds_nothing_after_the_window(tmp_path):
+    # Reports after the window's date are dropped, and the hub's change
+    # after 80 days (revisions to August 2022) is left out.
+    path = tmp_path / "triangle.csv"
+    _wide(200).to_csv(path, index=False)
+    tri = fg.realdata_triangle(path, "2021-06-30")
+    assert tri["report_date"].max() <= "2021-06-30"
+    delay = pd.to_datetime(tri["report_date"]) - pd.to_datetime(
+        tri["reference_date"]
+    )
+    assert delay.max() <= pd.Timedelta(days=80)
+
+
+def _window(**kw) -> "fg.RealdataWindow":
+    base = {
+        "as_of": "2021-07-31",
+        "truth_delay": 40,
+        "first_cut": "2021-04-20",
+        "held_out_dates": 2,
+    }
+    return fg.RealdataWindow(**(base | kw))
 
 
 @pytest.mark.slow
-def test_realdata_blocks_never_read_past_the_development_half():
-    # Reports after the window's date are dropped before any block is
-    # cut, and no block's truth runs past its truth date.
-    window = fg.realdata_window()
-    counts = fg.german_counts(_wide(400), window.as_of)
-    assert counts["report_date"].max() <= window.as_of
-    cuts = ["2021-11-30", "2021-12-03"]
-    blocks = fg.german_blocks(
-        counts,
-        cuts,
-        window.truth_until,
-        sources=window.sources,
-        places=window.places,
-    )
-    assert {b["source"] for b in blocks} == {"daily+rolling7", "weekly"}
+def test_realdata_blocks_are_the_german_tasks_as_forecast(tmp_path):
+    # Each nowcast date's tasks (Germany with its states, Germany with its
+    # age groups) laid out as the fine-tuned model forecasts them: daily
+    # with 7-day rows, the data rule's lag count.
+    path = tmp_path / "triangle.csv"
+    _wide(200).to_csv(path, index=False)
+    window = _window()
+    tri = fg.realdata_triangle(path, window.as_of)
+    cuts = window.cuts()[:3]
+    blocks = fg.realdata_blocks(tri, window, cuts, block_limit=1000)
+    assert {b["cut"] for b in blocks} == set(cuts)
     for b in blocks:
+        assert set(BLOCK_KEYS) <= set(b)
         assert b["data"] == "germany"
-        # Every level of a German task in one block, as the fine-tuned
-        # model forecasts it: Germany with its states, or with its ages.
+        assert b["source"] == "daily+rolling7"
         assert b["places"][0] == "CD"
         assert len(b["places"]) > 1
         assert b["truth_end"] <= window.truth_until < window.as_of
-        lags = fg.LAGS if b["source"] == fg.SOURCE else fg.WEEKLY_LAGS
-        assert b["lag"] in lags
-
-
-def test_weekly_blocks_take_weekly_releases_on_the_cut_weekday(monkeypatch):
-    counts = fg.german_counts(_wide(), "2021-07-31")
-    seen = []
-
-    def block(own, source, _view, cutoffs, max_lag):  # noqa: ARG001
-        seen.append((source, cutoffs, max_lag))
-
-    monkeypatch.setattr(fg, "training_block", block)
-    fg.german_blocks(counts, ["2021-06-01"], "2021-07-31", sources=("weekly",))
-    assert seen
-    for source, cutoffs, lag in seen:
-        assert source == "weekly"
-        assert cutoffs[-1] == "2021-06-01"
-        days = {dt.date.fromisoformat(c).weekday() for c in cutoffs}
-        assert days == {dt.date(2021, 6, 1).weekday()}
-        assert lag in fg.WEEKLY_LAGS
+        assert b["context"].shape[0] <= 1000
+        # Each target place has its daily row and its 7-day row.
+        assert b["n_targets"] == 2 * len(b["places"])
+    groups = {frozenset(p for p in b["places"] if p != "CD") for b in blocks}
+    assert frozenset({"CD-BW", "CD-BY"}) in groups
+    assert frozenset({"CD-A0", "CD-A1"}) in groups

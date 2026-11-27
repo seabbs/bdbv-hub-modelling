@@ -51,6 +51,34 @@ def test_a_checkpoint_hash_is_the_verified_settings_hash():
     assert not fr.is_real({"hash": "abc"})
 
 
+def test_passes_match_the_main_run_s_steps_within_a_cap():
+    # As many passes over the slices as give the main run's steps, at
+    # least one and at most the cap.
+    assert fr.choose_passes(1000, 82040, 20) == 20
+    assert fr.choose_passes(10000, 82040, 20) == 8
+    assert fr.choose_passes(200000, 82040, 20) == 1
+
+
+def test_checkpoints_are_fractions_of_the_passes():
+    # Prefixes are thousandths of the whole training, 1/8, 1/4, 1/2, all.
+    got = fr.checkpoint_steps(8000, [125, 250, 500, 1000])
+    assert got == {125: 1000, 250: 2000, 500: 4000, 1000: 8000}
+
+
+def test_each_pass_takes_every_block_once():
+    import numpy as np
+
+    sizes = np.array([10, 20, 30, 40, 50, 60])
+    lengths = np.array([16, 16, 32, 32, 16, 32])
+    plans = fr.pass_plans(lengths, sizes, 64, seed=1, passes=3)
+    assert len(plans) == 3
+    for plan in plans:
+        used = sorted(i for _, idx in plan for i in idx)
+        assert used == list(range(6))
+    # Each pass is shuffled with its own seed.
+    assert plans[0] != plans[1] or plans[1] != plans[2]
+
+
 def test_until_must_be_a_checkpoint():
     fr.check_until(500, [250, 500, 1000])
     with pytest.raises(ValueError, match="not a checkpoint"):
