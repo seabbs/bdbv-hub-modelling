@@ -97,14 +97,13 @@ def test_both_baselinenowcast_variants_are_registered():
     assert "foundation_baselinenowcast" in {s.name for s in list_models()}
 
 
-def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
-    # Chronos-2 sees each place's counts corrected by baselinenowcast's
-    # point nowcast, up to and with the cut-off day, and forecasts from
-    # the day after it.
+def test_the_context_is_the_median_nowcast_to_the_cut_off(task):
+    # Chronos-2 sees each place's counts corrected by the median of
+    # baselinenowcast's nowcast draws, up to and with the cut-off day, as
+    # the 7-day rows see the median of the walk's 7-day draws, and
+    # forecasts from the day after it.
     from bdbvhub.models import get_model
-    from nowcastbaselines.baselinenowcast import baselinenowcast
-    from nowcastbaselines.baselinenowcast.triangle import daily_triangle
-    from nowcastutils.dates import as_date
+    from nowcastfoundation.forecaster import point_nowcast
 
     store: list = []
     model = dataclasses.replace(
@@ -112,16 +111,19 @@ def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
     )
     model.forecast_both(task)
     group = store[-1]
-    cutoff = as_date(task.cutoff)
-    places = list(task.locations)
+    run = model.for_task(task)
+    rows, places, weeks = run._rows(task)
+    tri = run._triangle(rows, places, weeks[-1])
+    _, draws = point_nowcast(tri, places, task, run.stream or run.name)
     target = np.atleast_2d(group["target"])
     # Count rows are the places in the block's order: the country first.
-    place = places[0]
-    row = 1 + places.index(place)
-    tri, mask = daily_triangle(task.daily_history, place, cutoff, 120, 40)
-    point = np.asarray(baselinenowcast(tri, mask, output_type="point"))
-    assert target[row, -1] == pytest.approx(point[-1], rel=1e-5)
-    assert target[row, -10] == pytest.approx(point[-10], rel=1e-5)
+    place = list(task.locations)[0]
+    row = 1 + list(task.locations).index(place)
+    i = list(places).index(place)
+    median = np.median(draws[:, i, :], axis=0)
+    at = tri.times.index(str(task.cutoff)[:10])
+    assert target[row, -1] == pytest.approx(median[at], rel=1e-5)
+    assert target[row, -10] == pytest.approx(median[at - 9], rel=1e-5)
     # The context's last day is the cut-off, at least what is reported.
     reported = task.daily_history.loc[
         (task.daily_history["vintage"] == task.cutoff)
