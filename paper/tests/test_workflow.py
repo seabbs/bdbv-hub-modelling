@@ -233,7 +233,9 @@ def test_benchmark_commands_run_from_the_repository_root(
         for line in (paper.stdout + paper.stderr).splitlines()
         if "nowcastgermany backtest" in line
     ]
-    assert len(commands) == 2
+    # The held-out half only: the development half is the units'.
+    assert len(commands) == 1
+    assert "--held-out" in commands[0]
     for line in commands:
         # After the redirect into the rule's log.
         line = re.sub(r"^exec >\S+ 2>&1; ", "", line)

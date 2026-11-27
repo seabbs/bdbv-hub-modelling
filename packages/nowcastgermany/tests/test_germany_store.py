@@ -61,7 +61,9 @@ def _rows(origins: tuple[str, ...], models: tuple[str, ...]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _unit(root: Path, origins: tuple[str, ...], models: tuple[str, ...]) -> Path:
+def _unit(
+    root: Path, origins: tuple[str, ...], models: tuple[str, ...]
+) -> Path:
     root.mkdir(parents=True)
     for origin in origins:
         _rows((origin,), models).to_csv(root / f"{origin}.csv.gz", index=False)
@@ -205,11 +207,3 @@ def test_a_published_table_with_a_held_out_date_is_refused(
     rows.drop(columns="target").to_csv(folder / UNITS, index=False)
     with pytest.raises(ValueError, match="held-out"):
         load_units(folder, SPLIT, CONFIG.models)
-
-
-def test_the_checkpoint_release_path_is_gone() -> None:
-    # Our German forecasts reach the site through the paper's release
-    # only, never a checkpoint release's own asset.
-    assert not {"ft-load", "ft-tag", "unit-publish"} & set(cli.COMMANDS)
-    publish = (ROOT / "workflow" / "rules" / "publish.smk").read_text()
-    assert "publish_germany_unit" not in publish

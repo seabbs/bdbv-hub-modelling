@@ -33,7 +33,7 @@ def test_our_german_forecasts_are_the_paper_s_published_ones() -> None:
     # Our models' German forecasts are the fine-tuning workflow's units,
     # published for the paper as the newest paper-germany release
     # (`paperpipe.stored`), stacked with the others where the site's
-    # results are made (Site results). No checkpoint release is read.
+    # results are made (Site results).
     site = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "site-results.yml").read_text()
     )["jobs"]["site-results"]
@@ -43,8 +43,6 @@ def test_our_german_forecasts_are_the_paper_s_published_ones() -> None:
     assert "--set germany" in run
     assert fetch < load < run.index("concat-results --out results/germany")
     assert "parts-germany-units/germany" in run
-    for gone in ("ft-tag", "ft-load", "germany-forecasts.tar.gz"):
-        assert gone not in run, gone
 
 
 def test_the_built_german_page_is_checked_for_held_out_dates() -> None:

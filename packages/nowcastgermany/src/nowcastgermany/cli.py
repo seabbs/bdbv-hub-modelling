@@ -9,12 +9,11 @@ The German hospitalisation nowcasting benchmark
 - `teams`: score the hub teams' nowcasts.
 - `asof`: write the 7-day sums as each development date saw them.
 - `paper`: write the forecasts as the paper's long table.
-- `ft-load`: write the stored forecasts of the pinned fine-tuned
-  checkpoint, for the Pages build.
-- `ft-tag`: print the pinned checkpoint's release tag, whose asset the
-  Pages build downloads.
-- `unit-publish`: attach a released checkpoint's German unit to its
-  release as the stored forecasts (`publish_germany_unit`).
+- `units`: write our models' development forecasts and scores from the
+  fine-tuning workflow's German units (`nowcastgermany.store`), the
+  paper's development table.
+- `stored-load`: write them from the published `paper-germany` release,
+  for Site results.
 - `pairing-sensitivity`: score the walk models with and without their
   pairing on the development half (`nowcastgermany.pairing`).
 
@@ -34,7 +33,6 @@ from typing import Any
 
 import pandas as pd
 
-from nowcastfoundation import forecaster as foundation
 from nowcastgermany import evaluation as de
 from nowcastgermany import store as gs
 from nowcastgermany.data import hub_triangle
@@ -147,54 +145,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gpp.add_argument("--results", default="results/germany")
 
-    gft = sub.add_parser(
-        "ft-load",
-        help="Write the stored German forecasts of the fine-tuned model's "
-        "checkpoint, for the Pages build (`nowcastgermany.store`).",
+    gun = sub.add_parser(
+        "units",
+        help="Write our models' German development forecasts and scores "
+        "from the fine-tuning workflow's units (`nowcastgermany.store`).",
     )
-    gft.add_argument(
+    gun.add_argument(
+        "units",
+        nargs="+",
+        help="The units' folders: the reference and the checkpoint's.",
+    )
+    gun.add_argument(
         "--config", default="packages/nowcastgermany/config/germany.toml"
     )
-    gft.add_argument(
-        "--finetune", default="packages/nowcastfoundation/config/finetune.toml"
+    gun.add_argument("--out", default="results/germany")
+    gun.add_argument(
+        "--record",
+        default=None,
+        help="The checkpoint's release record (published.json), which the "
+        "note names.",
     )
-    gft.add_argument(
+
+    gsl = sub.add_parser(
+        "stored-load",
+        help="Write our models' German development forecasts and scores "
+        "from the published paper-germany release, for Site results.",
+    )
+    gsl.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
+    gsl.add_argument(
         "--store",
         required=True,
-        help="The unpacked release asset (`nowcastgermany.store.ASSET`).",
+        help="The unpacked paper-germany release (`paperpipe.stored`).",
     )
-    gft.add_argument(
+    gsl.add_argument(
         "--out", required=True, help="A `backtest` results directory."
     )
-    gft.add_argument(
+    gsl.add_argument(
         "--note",
         required=True,
-        help="JSON naming the checkpoint shown, which the page reads.",
-    )
-
-    gtg = sub.add_parser(
-        "ft-tag",
-        help="Print the release tag of the checkpoint "
-        "packages/nowcastfoundation/config/finetune.toml "
-        "pins.",
-    )
-    gtg.add_argument(
-        "--finetune", default="packages/nowcastfoundation/config/finetune.toml"
-    )
-
-    gup = sub.add_parser(
-        "unit-publish",
-        help="Attach a released checkpoint's German unit to its release as "
-        "the stored forecasts (`nowcastgermany.store.pack_unit`).",
-    )
-    gup.add_argument("cache", help="The score cache.")
-    gup.add_argument("label", help="The checkpoint's label, slots-<hash>.")
-    gup.add_argument(
-        "--config", default="packages/nowcastgermany/config/germany.toml"
-    )
-    gup.add_argument("--repo", default="seabbs/bdbv-hub-modelling")
-    gup.add_argument(
-        "--out", default=None, help="Write the asset here and upload nothing."
+        help="JSON naming the release and checkpoint shown, which the page "
+        "reads.",
     )
 
     return parser
@@ -339,51 +331,45 @@ def _paper(args: argparse.Namespace) -> int:
     return 0
 
 
-def _ft_load(args: argparse.Namespace) -> int:
-    config = de.load_germany_config(args.config)
-    tag = gs.pinned_tag(foundation.finetuned_label(args.finetune))
-    stored = gs.stored_tags(args.store)
-    note = Path(args.note)
-    note.parent.mkdir(parents=True, exist_ok=True)
-    shown = tag if tag in stored else None
-    meta = {"tag": shown, "pinned": tag, "models": list(gs.STORED_MODELS)}
-    note.write_text(json.dumps(meta, indent=2) + "\n")
-    if shown is None:
-        print(f"No stored German forecasts of the _ft models for {tag}.")
-        return 0
-    forecasts = gs.load_stored(args.store, tag, config.split_date)
+def _write_ours(
+    forecasts: pd.DataFrame, config: de.GermanyConfig, out: Path
+) -> None:
+    """Write our forecasts and their scores, as `backtest` does."""
     scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
-    print(f"The _ft models at {tag}: {len(scores)} scored nowcasts in {out}.")
-    return 0
+    print(f"Our German forecasts: {len(scores)} scored nowcasts in {out}.")
 
 
-def _ft_tag(args: argparse.Namespace) -> int:
-    print(gs.pinned_tag(foundation.finetuned_label(args.finetune)))
-    return 0
-
-
-def _unit_publish(args: argparse.Namespace) -> int:  # pragma: no cover - gh
-    import subprocess
-    import tempfile
-
+def _units(args: argparse.Namespace) -> int:
     config = de.load_germany_config(args.config)
-    tag = gs.release_tag(args.label)
-    if args.out:
-        path = gs.pack_unit(args.cache, args.label, args.out, config.split_date)
-        print(f"Wrote {path}.")
+    forecasts = gs.units_forecasts(args.units, config.split_date, config.models)
+    out = Path(args.out)
+    _write_ours(forecasts, config, out)
+    note = {
+        "checkpoint": gs.checkpoint_of(args.record),
+        "models": sorted(set(forecasts["model"])),
+    }
+    (out / gs.NOTE).write_text(json.dumps(note, indent=2) + "\n")
+    return 0
+
+
+def _stored_load(args: argparse.Namespace) -> int:
+    config = de.load_germany_config(args.config)
+    store = Path(args.store)
+    note = Path(args.note)
+    note.parent.mkdir(parents=True, exist_ok=True)
+    if not (store / gs.UNITS).exists():
+        note.write_text(json.dumps({"release": None}) + "\n")
+        print(f"No published German forecasts of ours in {store}.")
         return 0
-    with tempfile.TemporaryDirectory() as tmp:
-        path = gs.pack_unit(args.cache, args.label, tmp, config.split_date)
-        subprocess.run(
-            ["gh", "release", "upload", tag, str(path), "--clobber",
-             "-R", args.repo],
-            check=True,
-        )  # fmt: skip
-    print(f"Attached {gs.ASSET} to {tag}.")
+    manifest = json.loads((store / "manifest.json").read_text())
+    made = json.loads((store / gs.UNITS_NOTE).read_text())
+    forecasts = gs.load_units(store, config.split_date, config.models)
+    _write_ours(forecasts, config, Path(args.out))
+    meta = {"release": manifest["tag"], **made}
+    note.write_text(json.dumps(meta, indent=2) + "\n")
     return 0
 
 
@@ -392,9 +378,8 @@ COMMANDS = {
     "teams": _teams,
     "asof": _asof,
     "paper": _paper,
-    "ft-load": _ft_load,
-    "ft-tag": _ft_tag,
-    "unit-publish": _unit_publish,
+    "units": _units,
+    "stored-load": _stored_load,
     "pairing-sensitivity": _pairing_sensitivity,
 }
 """Each command's handler, but `fetch` (network)."""

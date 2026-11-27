@@ -9,8 +9,8 @@ name: Site results
 # waits on a fit. Fit store starts it each time it stores fits or
 # backtests; a dispatch makes the site's results at once. Skipped when
 # its inputs (the store's fits and backtests, the submission ledger, the
-# hub data, the code and the fine-tuned German forecasts) are those it
-# was last made from. Then Site is rebuilt.
+# hub data, the code and the paper's German release) are those it was
+# last made from. Then Site is rebuilt.
 #
 # Writes fit-store from main only. A dispatch from another branch must
 # name a scratch store branch (`store_branch`), for testing.
@@ -76,11 +76,19 @@ jobs:
           uv run bdbvhub bvd
           echo "BDBV_CHRONOS_FT=$(uv run bdbvhub finetuned-checkpoint)" \
             >> "$GITHUB_ENV"
-      - name: Fetch the store and the ledger, and hash them
+      # Our German development forecasts: the newest paper-germany release,
+      # as the paper's Pages build fetches it (`paperpipe.stored`), which
+      # holds the fine-tuning workflow's German units (the reference and
+      # the paper's checkpoint, `nowcastgermany units`). The site and the
+      # paper show the same forecasts.
+      - name: Fetch the store, the ledger and the German release; hash them
         id: key
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PYTHONPATH=paper uv run python -m paperpipe.stored fetch \
+            output/paper-stored --overlay output/paper-stored/overlay.yml \
+            --set germany
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
           mkdir -p output/ledger
           ledger=none
@@ -88,7 +96,8 @@ jobs:
             git archive FETCH_HEAD | tar -x -C output/ledger
             ledger=$(git rev-parse FETCH_HEAD)
           fi
-          tag=$(uv run nowcastgermany ft-tag)
+          tag=$(jq -r '.tag' output/paper-stored/germany/manifest.json \
+            2>/dev/null || echo none)
           key=$( {
             find "$STORE" -path "$STORE/site" -prune -o -type f \
               ! -name .commit -print0 | sort -z | xargs -0 sha256sum
@@ -114,29 +123,15 @@ jobs:
             cat "$STORE"/backtests/latest.tar.gz* | tar -xz
           fi
           uv run bdbvhub fit-store load --store "$STORE"
-      # The fine-tuned models' German forecasts, as the workflow's German
-      # unit made them: the asset germany-forecasts.tar.gz of the release
-      # packages/nowcastfoundation/config/finetune.toml pins (`nowcastgermany
-      # ft-tag`), attached by `publish_germany_unit`. Development dates
-      # only. `concat-results` stacks them with the other models, so they
-      # are scored on the same cells.
-      - name: Load the stored fine-tuned German forecasts
+      # Development dates only; `concat-results` stacks them with the other
+      # parts, so the hub teams are scored on the same cells.
+      - name: Load our German forecasts from the paper's release
         if: steps.key.outputs.make == 'true'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p output/germany-ft-store
-          tag=$(uv run nowcastgermany ft-tag)
-          if gh release download "$tag" -R "$GITHUB_REPOSITORY" \
-            -p germany-forecasts.tar.gz -D output/germany-ft-store; then
-            tar -xzf output/germany-ft-store/germany-forecasts.tar.gz \
-              -C output/germany-ft-store
-          fi
-          uv run nowcastgermany ft-load \
-            --store output/germany-ft-store \
-            --out output/parts/parts-germany-ft-store/germany \
-            --note results/germany/ft-checkpoint.json
+          uv run nowcastgermany stored-load \
+            --store output/paper-stored/germany \
+            --out output/parts/parts-germany-units/germany \
+            --note results/germany/units.json
       - name: Compare with hub forecasts, then the docs figures and tables
         if: steps.key.outputs.make == 'true'
         env:
