@@ -64,8 +64,13 @@ GERMANY_SPLIT = tomllib.loads(
     Path("packages/nowcastgermany/config/germany.toml").read_text()
 )["nowcast"]["split_date"]
 REFERENCE_VALUES = "paper/data/reference-values.csv"
-# The German and BDBV delays' structure (`delay_reference`).
+# The German and BDBV delays' structure (`delay_reference`), from the
+# BDBV releases the backtests use: a cumulative first release, more than
+# the backtests' longest delay before the next, is left out.
 DELAY_REFERENCE = f"{ROUNDS_DIR}/report/delay-reference.json"
+BDBV_MAX_DELAY = tomllib.loads(
+    Path("packages/nowcastbdbv/config/backtest.toml").read_text()
+)["forecast"]["max_delay"]
 
 
 rule germany_triangle:
@@ -321,9 +326,11 @@ rule delay_reference:
     params:
         split=GERMANY_SPLIT,
         daily=lambda wc, input: Path(input.hub[0]).parent / "daily.csv",
+        max_delay=BDBV_MAX_DELAY,
     shell:
         "uv run python workflow/scripts/sim_report.py delays {input.germany} "
-        "{params.split} {params.daily} {output} > {log} 2>&1"
+        "{params.split} {params.daily} {params.max_delay} {output} "
+        "> {log} 2>&1"
 
 
 rule hub_submissions_table:

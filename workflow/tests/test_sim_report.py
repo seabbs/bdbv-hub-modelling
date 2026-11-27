@@ -261,7 +261,7 @@ def test_bdbv_delay_rows_leave_out_a_cumulative_first_release():
     daily = pd.DataFrame(
         {"vintage": ["2026-08-01", "2026-10-01", "2026-10-08"],
          "location": "CD-IT",
-         "onset_date": ["2026-07-30", "2026-10-01", "2026-10-01"],
+         "onset_date": ["2026-08-01", "2026-10-01", "2026-10-01"],
          "observed": [40, 3, 5]}
     )  # fmt: skip
     daily["cutoff"] = daily["vintage"]

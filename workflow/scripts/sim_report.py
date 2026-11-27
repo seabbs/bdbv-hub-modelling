@@ -23,7 +23,8 @@ paper's reference values (`paper/data/reference-values.csv`):
     uv run python workflow/scripts/sim_report.py diseases <out.csv> \
         <reference-values.csv> <outbreaks.csv> [...]
     uv run python workflow/scripts/sim_report.py delays \
-        <COVID-19_hospitalizations.csv> <split_date> <daily.csv> <out.json>
+        <COVID-19_hospitalizations.csv> <split_date> <daily.csv> \
+        <max_delay> <out.json>
     uv run python workflow/scripts/sim_report.py render <out.html> <title> \
         <reference-values.csv> <germany.csv> <delays.json> \
         <name>=<sims_dir>:<outbreaks.csv> [...]
@@ -48,6 +49,7 @@ import numpy as np
 import pandas as pd
 
 from nowcastgermany.data import hub_changes
+from nowcastutils.releases import cumulative_first_release
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[1]))
@@ -144,17 +146,21 @@ def germany_delay_rows(wide: pd.DataFrame, split: str) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
-def bdbv_delay_rows(daily: pd.DataFrame) -> pd.DataFrame:
+def bdbv_delay_rows(daily: pd.DataFrame, max_delay: int) -> pd.DataFrame:
     """Return the BDBV provinces' changes from one release to the next.
 
-    From the hub's daily onsets by release (`daily.csv`): each province
-    and onset date's count at each release less its count at the one
-    before, as `stratum`, `ref` (onset date), `rep` (release) and
-    `count`. The country is the provinces' total, not a stratum. Onset
-    dates before the first release are left out, as their delays are
-    not seen.
+    From the hub's daily onsets by release (`daily.csv`, with `cutoff`):
+    each province and onset date's count at each release less its count
+    at the one before, as `stratum`, `ref` (onset date), `rep` (release)
+    and `count`. The usable releases are those the backtests use: a
+    cumulative first release (more than `max_delay` days before the next
+    release's cut-off, `nowcastutils.releases.cumulative_first_release`)
+    is left out. The country is the provinces' total, not a stratum.
+    Onset dates before the first usable release are left out, as their
+    delays are not seen.
     """
-    d = daily.loc[daily["location"] != "CD"]
+    dump = cumulative_first_release(daily, max_delay)
+    d = daily.loc[(daily["location"] != "CD") & (daily["vintage"] != dump)]
     wide = d.pivot_table(
         index=["location", "onset_date"],
         columns="vintage",
@@ -192,12 +198,15 @@ def _entry(short: str, label: str, rows: pd.DataFrame) -> dict:
     }
 
 
-def delay_reference(triangle: Path, split: str, daily: Path) -> dict:
+def delay_reference(
+    triangle: Path, split: str, daily: Path, max_delay: int
+) -> dict:
     """Return the German and BDBV delay structures to compare with.
 
     Germany: the hub's triangle in the development half, the states as
     the national series' children (`germany_delay_rows`). BDBV: the
-    hub's releases, the provinces as the country's children
+    hub's usable releases (a cumulative first release left out, with
+    the backtests' `max_delay`), the provinces as the country's children
     (`bdbv_delay_rows`). Each as `flowlib.delay_structure` gives it.
     """
     wide = pd.read_csv(triangle)
@@ -210,7 +219,7 @@ def delay_reference(triangle: Path, split: str, daily: Path) -> dict:
         "bdbv": _entry(
             "BDBV",
             "BDBV (hub releases, provinces)",
-            bdbv_delay_rows(pd.read_csv(daily)),
+            bdbv_delay_rows(pd.read_csv(daily), max_delay),
         ),
     }
 
@@ -1511,10 +1520,12 @@ def main(argv: list[str]) -> None:
         diseases(d, refs).to_csv(argv[1], index=False)
         print(f"diseases -> {argv[1]}")
     elif argv[0] == "delays":
-        got = delay_reference(Path(argv[1]), argv[2], Path(argv[3]))
-        Path(argv[4]).parent.mkdir(parents=True, exist_ok=True)
-        Path(argv[4]).write_text(json.dumps(got))
-        print(f"delays -> {argv[4]}")
+        got = delay_reference(
+            Path(argv[1]), argv[2], Path(argv[3]), int(argv[4])
+        )
+        Path(argv[5]).parent.mkdir(parents=True, exist_ok=True)
+        Path(argv[5]).write_text(json.dumps(got))
+        print(f"delays -> {argv[5]}")
     elif argv[0] == "render":
         render(
             Path(argv[1]),
