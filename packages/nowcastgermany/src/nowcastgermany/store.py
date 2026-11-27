@@ -9,9 +9,9 @@ the reference and the paper's final checkpoint's unit as the German
 development table (`units_forecasts`), which the paper's
 `germany_development` rule scores. `release_paper_germany` publishes it
 in the `paper-germany-<hash>` release (`UNITS`, with its note `NOTE`),
-and Site results loads the newest one (`nowcastgermany stored-load`,
-`load_units`), so the site and the paper show the same forecasts and no
-German backtest runs for either.
+and Site results loads the one the paper reads (`nowcastgermany
+stored-load`, `load_units`), so the site and the paper show the same
+forecasts and neither runs a backtest of the development half.
 
 Only development dates, nowcast dates before the split date, at the
 hub's nowcast horizons are ever stacked or loaded (`development_rows`).

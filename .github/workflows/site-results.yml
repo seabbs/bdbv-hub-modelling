@@ -76,8 +76,8 @@ jobs:
           uv run bdbvhub bvd
           echo "BDBV_CHRONOS_FT=$(uv run bdbvhub finetuned-checkpoint)" \
             >> "$GITHUB_ENV"
-      # Our German development forecasts: the newest paper-germany release,
-      # as the paper's Pages build fetches it (`paperpipe.stored`), which
+      # Our German development forecasts: the paper-germany release the
+      # paper's Pages build reads (`paperpipe.stored fetch`), which
       # holds the fine-tuning workflow's German units (the reference and
       # the paper's checkpoint, `nowcastgermany units`). The site and the
       # paper show the same forecasts.
@@ -96,6 +96,7 @@ jobs:
             git archive FETCH_HEAD | tar -x -C output/ledger
             ledger=$(git rev-parse FETCH_HEAD)
           fi
+          # The tag of the release fetched, named in its bundle.
           tag=$(jq -r '.tag' output/paper-stored/germany/manifest.json \
             2>/dev/null || echo none)
           key=$( {

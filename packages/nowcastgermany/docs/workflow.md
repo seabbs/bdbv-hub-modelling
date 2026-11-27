@@ -11,4 +11,4 @@ The [paper workflow](https://github.com/seabbs/bdbv-hub-modelling/blob/main/pape
 `germany_development` stacks the reference unit and the final checkpoint's unit as our development forecasts (`nowcastgermany units`), with no backtest of its own.
 `release_paper_germany` publishes them in the `paper-germany-<hash>` release.
 
-The [Site results workflow](https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/site-results.yml) loads our forecasts from the newest `paper-germany` release (`stored-load`), the same the paper reads, scores the hub teams (`teams`, `asof`, `paper`) and builds the [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/) page.
+The [Site results workflow](https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/site-results.yml) loads our forecasts from the `paper-germany` release the paper reads (`stored-load`), scores the hub teams (`teams`, `asof`, `paper`) and builds the [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/) page.

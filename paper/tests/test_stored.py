@@ -197,7 +197,7 @@ def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
 
 
 def test_fetch_takes_only_the_sets_asked_for(tmp_path: Path) -> None:
-    # Site results reads the German set alone, the paper's newest.
+    # Site results reads the German set alone, as the paper does.
     releases = [
         {"tag_name": "paper-germany-aaa", "created_at": "2026-11-20T00:00:00Z"},
         {"tag_name": "paper-germany-bbb", "created_at": "2026-11-24T00:00:00Z"},
