@@ -14,10 +14,10 @@ The paper's German study runs its commands, and `bdbvhub` builds the docs site's
 
 ## Modules
 
-- [`cli`](src/nowcastgermany/cli.py): the `nowcastgermany` command (fetch, backtest, teams, asof, paper, ft-load, ft-tag, unit-publish, pairing-sensitivity).
+- [`cli`](src/nowcastgermany/cli.py): the `nowcastgermany` command (fetch, backtest, teams, asof, paper, units, stored-load, pairing-sensitivity).
 - [`data`](src/nowcastgermany/data.py): the hub's reporting triangles and forecasts as tasks.
 - [`evaluation`](src/nowcastgermany/evaluation.py): the benchmark, our models scored beside the hub's teams.
-- [`store`](src/nowcastgermany/store.py): the fine-tuned model's German forecasts, packed from the German unit as an asset of its checkpoint's release.
+- [`store`](src/nowcastgermany/store.py): our models' German development forecasts, stacked from the fine-tuning workflow's units and read back from the paper's `paper-germany` release.
 - [`checkpoint`](src/nowcastgermany/checkpoint.py): scoring each published fine-tuned checkpoint on the benchmark (and its held-out loss) against the references.
 - [`pairing`](src/nowcastgermany/pairing.py): the walk models' pairing sensitivity on the benchmark.
 - [`finetune_blocks`](src/nowcastgermany/finetune_blocks.py): German real-data training blocks, for the real-data ablation.

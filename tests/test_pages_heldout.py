@@ -27,17 +27,20 @@ def _build_script() -> str:
     return "\n".join(str(s.get("run", "")) for s in steps)
 
 
-def test_the_stored_ft_model_is_not_forecast() -> None:
-    # Its forecasts are the pinned release's asset, stacked with the
-    # others where the site's results are made (Site results).
+def test_our_german_forecasts_are_the_paper_s_published_ones() -> None:
+    # Our models' German forecasts are the fine-tuning workflow's units,
+    # published for the paper as its paper-germany release
+    # (`paperpipe.stored`), stacked with the others where the site's
+    # results are made (Site results).
     site = yaml.safe_load(
         (ROOT / ".github" / "workflows" / "site-results.yml").read_text()
     )["jobs"]["site-results"]
     run = "\n".join(str(s.get("run", "")) for s in site["steps"])
-    load = run.index("nowcastgermany ft-load")
-    assert "germany-forecasts.tar.gz" in run
-    assert load < run.index("concat-results --out results/germany")
-    assert "parts-germany-ft-store/germany" in run
+    fetch = run.index("paperpipe.stored fetch")
+    load = run.index("nowcastgermany stored-load")
+    assert "--set germany" in run
+    assert fetch < load < run.index("concat-results --out results/germany")
+    assert "parts-germany-units/germany" in run
 
 
 def test_the_built_german_page_is_checked_for_held_out_dates() -> None:
