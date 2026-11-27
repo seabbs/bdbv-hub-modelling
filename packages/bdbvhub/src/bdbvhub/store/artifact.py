@@ -104,7 +104,9 @@ def guard(event: str, ref: str, scratch: str = "") -> int:
     return 0
 
 
-def _gh(*args: str, out: Any = subprocess.PIPE) -> subprocess.CompletedProcess:
+def _gh(
+    *args: str, out: Any = subprocess.PIPE
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         ["gh", *args], stdout=out, stderr=subprocess.PIPE, check=False
     )
@@ -117,7 +119,7 @@ def _repo() -> str:
     got = _gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
     if got.returncode != 0:
         raise StoreError("could not tell the repository; set GITHUB_REPOSITORY")
-    return got.stdout.decode().strip()
+    return str(got.stdout.decode().strip())
 
 
 def _trusted(art: dict[str, Any], store: str) -> bool:
