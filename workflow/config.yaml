@@ -147,6 +147,11 @@ runs:
   # Run A without the attention biases (the paper's slots comparison,
   # paper/workflow/config.yaml `comparisons`).
   noslots: {series_bias: false}
+  # Run A with only some of the attention biases: the same-place bias
+  # alone, and the parent and child biases alone (the paper's attention
+  # bias setups, with noslots).
+  sameonly: {bias_pairs: [same]}
+  parentonly: {bias_pairs: [up, down]}
   # Run A on complete counts, without lag series (the paper's delays
   # comparison).
   nodelays: {layout: complete}

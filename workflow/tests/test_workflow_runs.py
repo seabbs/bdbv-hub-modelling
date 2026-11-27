@@ -20,9 +20,9 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
     assert list(cfg["runs"]) == [
         "runa",
         "noslots",
-        "nodelays",
         "sameonly",
         "parentonly",
+        "nodelays",
         "realdata",
         "runb",
     ]
