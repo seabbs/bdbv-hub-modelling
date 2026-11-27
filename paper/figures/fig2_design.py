@@ -235,8 +235,8 @@ def panel_a(g: Svg, oy: float) -> float:
 # Applications, the columns of panel B: a name and a note.
 APPS = (
     ("Held-out simulations", "test set"),
-    ("German nowcast hub", "7-day sums, max delay 40 days"),
-    ("Ebola forecasting hub", "weekly targets, max delay 42 days"),
+    ("German nowcast hub", "7-day sums, max delay 40 d"),
+    ("Ebola forecasting hub", "weekly, max delay 42 d"),
 )
 
 # Models and inputs, the rows of panel B: the model, its input, and per
@@ -346,6 +346,8 @@ def panel_b(g: Svg, oy: float) -> float:
         " per province, to fit in GPU memory.",
         "Ebola only: draws paired across places by a copula for the hub's"
         " trajectories, with the alternatives in the SI.",
+        "Checkpoints of the models fine-tuned on simulations are scored on"
+        " the validation simulations and the German development half (SI).",
     ]
     y += 12
     for line in notes:

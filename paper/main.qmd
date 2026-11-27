@@ -218,6 +218,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
 - Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
+- We scored every checkpoint of every fine-tuned model, including those without attention biases and without lag series, on the validation simulations and the German development half, and show these in the Supporting Information (*Checkpoint curve*).
 - At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
 - We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
 - Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, *Fitting in GPU memory*).
