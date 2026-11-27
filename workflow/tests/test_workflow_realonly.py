@@ -24,7 +24,7 @@ def test_the_real_only_run_is_run_a_s_recipe_on_real_data():
         assert real.ft[key] == a.ft[key], key
     assert real.ft["series_bias"]
     assert real.ft["layout"] == "ragged"
-    # Chronos-2's default 1,000 steps, checkpoints on the way.
+    # Checkpoints at thousandths of the whole training: 1/8 to all.
     assert real.ft["prefixes"][-1] == 1000
     assert "realonly" not in runs.trained(cfg, found)
 
@@ -42,6 +42,9 @@ def test_the_real_trainer_takes_the_run_s_recipe():
     assert "--series-bias" in opts
     assert "--bias-lr" in opts
     assert "--prefixes 125 250 500 1000" in opts
+    # Passes to the main run's steps (Run A's final checkpoint), capped.
+    assert "--target-steps 82040" in opts
+    assert "--max-passes 20" in opts
 
 
 def test_one_target_cuts_trains_scores_and_publishes(tmp_path):
