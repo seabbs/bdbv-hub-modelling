@@ -18,6 +18,7 @@ waits on in place of its table, and `None` in place of its numbers.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
@@ -131,14 +132,52 @@ COMPARISONS: Final = {
         "the full and no-delay runs' scores by checkpoint",
         ("with delays", "without delays"),
     ),
+    # The workflow's `realdata` run: German blocks mixed into Run A's
+    # simulations.
     "realdata": (
         "the real-data and synthetic fine-tunes' scores",
         ("synthetic", "synthetic and German"),
+    ),
+    # The workflow's `realonly` run: real data alone (`foundation_real`).
+    "realonly": (
+        "the real-only and synthetic fine-tunes' scores",
+        ("synthetic", "real data alone"),
     ),
 }
 """Each fine-tuning comparison of the live run with a variant: what it
 waits on until the variant is scored, and the two runs' labels. The
 variant is named by its workflow run (the paper config's `comparisons`)."""
+
+
+def _step(label: str) -> int:
+    """Return a run checkpoint's steps or outbreaks, `n<N>`; 0 otherwise."""
+    return int(label[1:]) if re.fullmatch(r"n\d+", label) else 0
+
+
+def _on_live_axis(rows: pd.DataFrame, run: str, other: str) -> pd.DataFrame:
+    """Put a variant trained on no simulations on the live run's axis.
+
+    A run on real data alone (the workflow's `data: real`) has steps, not
+    outbreaks, so its rows have none. Its final checkpoint's German rows
+    are repeated at each of the live run's outbreaks, a line to compare
+    with; its held-out loss, on real blocks, is left out. Any other
+    variant's rows are returned as they are.
+    """
+    mine = rows["run"] == other
+    if not mine.any() or (rows.loc[mine, "outbreaks"] > 0).any():
+        return rows
+    labels = rows.loc[mine, "checkpoint"].astype(str).unique()
+    final = max(labels, key=_step)
+    last = rows.loc[
+        mine
+        & (rows["checkpoint"].astype(str) == final)
+        & (rows["study"] != "held_out")
+    ]
+    live = rows.loc[(rows["run"] == run) & (rows["outbreaks"] > 0)]
+    spread = [
+        last.assign(outbreaks=n) for n in sorted(live["outbreaks"].unique())
+    ]
+    return pd.concat([rows.loc[~mine], *spread], ignore_index=True)
 
 
 def comparison_rows(
@@ -150,12 +189,14 @@ def comparison_rows(
     scores of each model on the German first half,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
     `score`). `labels` name `run` and `other`. Empty while `other` has no
-    scored checkpoint.
+    scored checkpoint. A variant on real data alone is its final
+    checkpoint at each of the live run's outbreaks (`_on_live_axis`).
     """
     rows = tidy(scores)
     names = dict(zip((run, other), labels, strict=True))
     if not (rows["run"] == other).any():
         return pd.DataFrame(columns=["set", "run", "outbreaks", "score"])
+    rows = _on_live_axis(rows, run, other)
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
     loss = rows.loc[
         (rows["study"] == "held_out") & rows["level"].isin(VALIDATION_LEVELS)
@@ -835,7 +876,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("slots", "delays", "realdata", "daily"):
+    for name in ("slots", "delays", "realdata", "realonly", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

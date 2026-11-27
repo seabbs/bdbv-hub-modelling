@@ -37,11 +37,15 @@ promote_branches: [main, next]
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
-# until its run has a scored checkpoint.
+# until its run has a scored checkpoint. `realdata` is Run A with German
+# real-data blocks mixed into its simulations; `realonly` is Chronos-2
+# fine-tuned on real data alone (`foundation_real`), with no simulations,
+# drawn as its final checkpoint across the live run's.
 comparisons:
   slots: noslots
   delays: nodelays
   realdata: realdata
+  realonly: realonly
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
