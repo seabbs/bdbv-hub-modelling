@@ -7,13 +7,22 @@ workflow/scripts/evaluate_offloaded.py runs it (rules/evaluate.smk).
 
 Kinds: `start` (step 0), `monitor` (the logged held-out loss),
 `by_source` and `checkpoint` (a checkpoint's held-out settings).
+
+On the CPU the one-pass evaluation splits its batches over
+`EVALUATE_WORKERS` worker processes (`evaluate_workers`, `Split`), each
+with its share of the job's threads and cores
+(`nowcastutils.workers.pooled`). The batches are those one process runs,
+so the results are the same however many workers run them. A worker
+exits when its coordinator does, which stops its workers on SIGTERM.
 """
 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import inspect
 import json
+import os
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -30,8 +39,40 @@ from nowcastfoundation.forecaster import (
     CHRONOS_REVISION,
     rolling_totals,
 )
+from nowcastutils import workers
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
+
+WORKERS_ENV = "EVALUATE_WORKERS"
+"""The environment variable with the worker processes a held-out pass
+splits its batches over (the rule's, `flowlib.scoring`)."""
+
+
+def evaluate_workers(device: str) -> int:
+    """Return the worker processes a held-out pass on `device` splits over.
+
+    `EVALUATE_WORKERS` (`WORKERS_ENV`) on the CPU, else one: off the CPU
+    the pass runs in its own process, which holds the device.
+    """
+    if device != "cpu":
+        return 1
+    return max(1, int(os.environ.get(WORKERS_ENV) or 1))
+
+
+@dataclasses.dataclass(frozen=True)
+class Split:
+    """The worker processes a held-out pass splits its batches over.
+
+    Each loads the held-out blocks from `blocks` (`load_blocks`, checked
+    against `n`) and base Chronos-2 with the adapter scored, from
+    `loader(device)` (`load_base` when None), which the workers import
+    by name.
+    """
+
+    workers: int
+    blocks: Path
+    n: int | None = None
+    loader: Callable[[str], Any] | None = None
 
 
 def load_blocks(path: Path, n: int | None = None) -> list[dict[str, Any]]:
@@ -50,13 +91,15 @@ def evaluate(
     blocks: Sequence[dict[str, Any]],
     kinds: Sequence[str],
     batch_size: int,
+    split: Split | None = None,
 ) -> dict[str, Any]:
     """Return the losses `kinds` ask for of `base` with `adapter`.
 
     `base` is a base Chronos-2 model, with the series bias attached if
     the adapter holds one. One forward pass over the blocks the kinds
     need (`held_out_pass`) gives every loss and the coverage, each as the
-    trainer's own functions give it (`finetune.stream`).
+    trainer's own functions give it (`finetune.stream`). With `split`,
+    over its worker processes (`split_pass`).
     """
     unknown = set(kinds) - set(KINDS)
     if unknown:
@@ -66,18 +109,14 @@ def evaluate(
     full = "start" in kinds or "checkpoint" in kinds
     need = range(len(val)) if full else _subset_needs(val, kinds)
     device = str(next(model.parameters()).device)
-    scored = dict(
-        zip(
-            need,
-            held_out_pass(
-                model,
-                [val[i] for i in need],
-                batch_size,
-                eval_budget(device),
-            ),
-            strict=True,
+    rows = [val[i] for i in need]
+    if split is not None and split.workers > 1:
+        passed = split_pass(
+            split, adapter, list(need), rows, batch_size, device
         )
-    )
+    else:
+        passed = held_out_pass(model, rows, batch_size, eval_budget(device))
+    scored = dict(zip(need, passed, strict=True))
     got = [scored.get(i) for i in range(len(val))]
     out: dict[str, Any] = {}
     if full:
@@ -339,6 +378,15 @@ def pack(data: Any, budget: int) -> list[list[int]]:
     return groups
 
 
+def plan(data: Any, budget: int | None) -> list[list[int]]:
+    """Return a held-out pass's batches of `data` (`fs.ByLength`).
+
+    The trainer's batches (`ByLength.plan`) without a `budget`, else
+    blocks packed to it (`pack`).
+    """
+    return data.plan() if budget is None else pack(data, budget)
+
+
 def eval_budget(device: str) -> int | None:
     """Return a held-out batch's series x tokens on `device`, or None.
 
@@ -361,12 +409,14 @@ def _each_batch(
     budget: int | None = None,
     precision: str | None = None,
     before: Callable[[list[int]], None] | None = None,
+    groups: Sequence[Sequence[int]] | None = None,
+    data: Any = None,
 ) -> None:
     """Run each batch of held-out blocks through the model once.
 
-    Batches are the trainer's (`stream.ByLength`) without a `budget`,
-    else blocks packed to it (`pack`); a batch that runs out of memory is
-    split in two. Each forward runs at the inference precision
+    Batches are `groups`, by default `plan`'s of `data` (the blocks'
+    `stream.ByLength`, built if not given); a batch that runs out of
+    memory is split in two. Each forward runs at the inference precision
     (`precision`, by default `PRECISION`;
     `backends.chronos2.inference_precision`), after `before(indices)`,
     and `use(indices, batch, output)` takes its result.
@@ -377,13 +427,15 @@ def _each_batch(
 
     from nowcastfoundation.backends.chronos2 import autocast
 
-    data = fs.ByLength(
-        list(blocks),
-        batch_size,
-        DatasetMode.VALIDATION,
-        series_bias.has_bias(model),
-    )
-    groups = list(data.indices()) if budget is None else pack(data, budget)
+    if data is None:
+        data = fs.ByLength(
+            list(blocks),
+            batch_size,
+            DatasetMode.VALIDATION,
+            series_bias.has_bias(model),
+        )
+    if groups is None:
+        groups = plan(data, budget)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     device = str(next(model.parameters()).device)
     training = model.training
@@ -410,8 +462,7 @@ def _each_batch(
     with torch.no_grad():
         for k, indices in enumerate(groups, start=1):
             run(list(indices))
-            if budget is not None:
-                fs.report_batch(k, len(groups))
+            fs.report_batch(k, len(groups))
     model.train(training)
 
 
@@ -421,10 +472,13 @@ def held_out_pass(
     batch_size: int,
     budget: int | None = None,
     precision: str | None = None,
+    groups: Sequence[Sequence[int]] | None = None,
+    data: Any = None,
 ) -> list[dict[str, Any]]:
     """Return each block's row losses and interval hits, from one pass.
 
-    Each batch (`_each_batch`) is run through the model once: its loss by
+    Each batch (`_each_batch`; only `groups`, if given, whose blocks
+    alone have entries) is run through the model once: its loss by
     row (`row_losses`, in fp32) over every step, the nowcast steps and
     the forecast steps, and its target rows' 50% and 90% interval hits
     (`_block_hits`). A block's entry holds `n`, its rows, `loss`,
@@ -466,7 +520,116 @@ def held_out_pass(
                 }
                 start += n
 
-        _each_batch(model, blocks, batch_size, use, budget, precision, before)
+        _each_batch(
+            model,
+            blocks,
+            batch_size,
+            use,
+            budget,
+            precision,
+            before,
+            groups,
+            data,
+        )
+    return out
+
+
+_WORKER: dict[str, Any] = {}
+"""A worker process's model, blocks and their batches (`_start_worker`)."""
+
+
+def _start_worker(
+    blocks: Path,
+    n: int | None,
+    need: Sequence[int],
+    adapter: Path,
+    device: str,
+    batch_size: int,
+    loader: Callable[[str], Any],
+    counter: Any,
+    n_workers: int,
+    parent: int,
+) -> None:
+    """Set up a held-out pass's worker: its cores, model and blocks.
+
+    Base Chronos-2 on `device` (`loader`) with `adapter` (and its series
+    bias) merged, as `score` loads it, and the held-out blocks `need` of those
+    at `blocks`, in the batches one process builds. It exits when its
+    coordinator, process `parent`, does.
+    """
+    from chronos.chronos2.dataset import DatasetMode
+
+    from nowcastfoundation.backends.chronos2 import apply_threads
+
+    workers.watch_parent(parent)
+    workers.pin_worker(counter, n_workers)
+    apply_threads()
+    val = load_blocks(blocks, n)
+    rows = [val[i] for i in need]
+    model = loader(device)
+    series_bias.attach_for(model, adapter)
+    model = merged(model, adapter)
+    data = fs.ByLength(
+        rows, batch_size, DatasetMode.VALIDATION, series_bias.has_bias(model)
+    )
+    _WORKER.update(model=model, rows=rows, data=data, batch_size=batch_size)
+
+
+def _worker_batch(group: tuple[int, ...]) -> list[dict[str, Any]]:
+    """Return a batch's blocks' `held_out_pass` entries, in a worker."""
+    got = held_out_pass(
+        _WORKER["model"],
+        _WORKER["rows"],
+        _WORKER["batch_size"],
+        groups=[list(group)],
+        data=_WORKER["data"],
+    )
+    return [got[i] for i in group]
+
+
+def split_pass(
+    split: Split,
+    adapter: Path,
+    need: Sequence[int],
+    rows: Sequence[dict[str, Any]],
+    batch_size: int,
+    device: str,
+) -> list[dict[str, Any]]:
+    """Return `held_out_pass` of `rows` over `split`'s worker processes.
+
+    `rows` are the held-out blocks `need`, scored with `adapter` on
+    `device`. The batches are those one process runs (`plan`), the
+    costliest (`block_cost`) given out first, so the entries are the same
+    however many workers run them. Each batch is reported as it is done
+    (`fs.report_batch`).
+    """
+    from chronos.chronos2.dataset import DatasetMode
+
+    rows = list(rows)
+    data = fs.ByLength(rows, batch_size, DatasetMode.VALIDATION)
+    groups = plan(data, eval_budget(device))
+    groups.sort(key=lambda g: -sum(block_cost(rows[i]) for i in g))
+    out: list[dict[str, Any]] = [{} for _ in rows]
+    tasks = [(tuple(g),) for g in groups]
+    results = workers.pooled(
+        _worker_batch,
+        tasks,
+        split.workers,
+        _start_worker,
+        (
+            split.blocks,
+            split.n,
+            list(need),
+            adapter,
+            device,
+            batch_size,
+            split.loader or load_base,
+        ),
+    )
+    for k, ((group,), got) in enumerate(results, start=1):
+        for i, entry in zip(group, got, strict=True):
+            out[i] = entry
+        fs.report_batch(k, len(groups))
     return out
 
 
@@ -909,23 +1072,29 @@ def score(
     kinds: Sequence[str],
     batch_size: int,
     device: str,
+    split: Split | None = None,
 ) -> tuple[dict[str, Any], float]:
     """Return the losses `kinds` ask for of `adapter`, and the seconds.
 
     Scores a copy of base Chronos-2 on `device` with the adapter (and its
-    series bias) attached, then frees it.
+    series bias) attached, then frees it; with `split`, over its worker
+    processes.
     """
     model = copy.deepcopy(base).to(device)
     series_bias.attach_for(model, adapter)
     tick = time.perf_counter()
-    losses = evaluate(adapter, model, blocks, kinds, batch_size)
+    losses = evaluate(adapter, model, blocks, kinds, batch_size, split)
     del model
     fs.free_memory()
     return losses, time.perf_counter() - tick
 
 
 def snapshot_result(
-    base: Any, snapshot: Path, blocks: list[dict[str, Any]], device: str
+    base: Any,
+    snapshot: Path,
+    blocks: list[dict[str, Any]],
+    device: str,
+    split: Split | None = None,
 ) -> dict[str, Any]:
     """Return a step snapshot's losses, as its `request.json` asks."""
     request = json.loads((snapshot / "request.json").read_text())
@@ -937,6 +1106,7 @@ def snapshot_result(
         kinds,
         request.get("batch_size", 256),
         device,
+        split,
     )
     return {
         **{k: request[k] for k in ("step", "n_outbreaks") if k in request},
@@ -953,11 +1123,13 @@ def write_checkpoint_sidecar(
     blocks: list[dict[str, Any]],
     device: str,
     batch_size: int = 256,
+    split: Split | None = None,
 ) -> dict[str, Any]:
     """Score checkpoint `where` on the held-out blocks; write its sidecar.
 
     The sidecar (`sidecar.SIDECAR`, beside its settings) holds the
     checkpoint's held-out losses and base Chronos-2's (`sidecar.start_loss`).
+    With `split`, the pass runs over its worker processes.
 
     Raises
     ------
@@ -977,6 +1149,7 @@ def write_checkpoint_sidecar(
         ["checkpoint"],
         batch_size,
         device,
+        split,
     )
     out = {
         "held_out_loss_start": start,
