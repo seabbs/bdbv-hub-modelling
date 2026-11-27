@@ -234,8 +234,8 @@ def test_bdbv_delay_rows_are_province_changes_between_releases():
         {"vintage": ["2026-10-01", "2026-10-01", "2026-10-08",
                      "2026-10-08", "2026-10-08", "2026-10-08"],
          "location": ["CD", "CD-IT", "CD", "CD-IT", "CD-IT", "CD-IT"],
-         "onset_date": ["2026-09-30", "2026-09-30", "2026-09-30",
-                        "2026-09-30", "2026-10-03", "2026-09-01"],
+         "onset_date": ["2026-10-01", "2026-10-01", "2026-10-01",
+                        "2026-10-01", "2026-10-03", "2026-09-01"],
          "observed": [3, 3, 9, 5, 4, 7]}
     )  # fmt: skip
     rows = sr.bdbv_delay_rows(daily).sort_values(["ref", "rep"])
@@ -247,8 +247,8 @@ def test_bdbv_delay_rows_are_province_changes_between_releases():
         for r in rows.itertuples()
     ]
     assert got == [
-        ("09-30", "10-01", 3),
-        ("09-30", "10-08", 2),
+        ("10-01", "10-01", 3),
+        ("10-01", "10-08", 2),
         ("10-03", "10-08", 4),
     ]
 
