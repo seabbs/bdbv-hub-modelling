@@ -75,6 +75,10 @@ EBOLA_DRAWS = FLOW.ebola_draws
 TOOLS_ENV = "../../workflow/envs/tools.yaml"
 
 
+# The branches a promote rule runs from (`promote_branches`).
+PROMOTE_BRANCHES = " ".join(config["promote_branches"])
+
+
 wildcard_constraints:
     mode="|".join(MODES),
     study="|".join(STUDIES),

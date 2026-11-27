@@ -853,7 +853,10 @@ rule summary:
 # the synthetic forecasts and pairing scores, the final run's validation
 # curve and the runs' checkpoint tables, and the simulation summaries and
 # example seeds. Each set's rule exists on a host that makes its inputs.
-# Writes releases, so it is the opt-in target `paper_inputs`.
+# `promote_paper_<set>` then names that release the set's current one in
+# the release paper-<set>-main, which the Site build reads, from a commit
+# on `promote_branches` only. Writes releases, so it is the opt-in target
+# `paper_inputs`.
 STORED_SETS = {
     name: files
     for name, files in stored.sets(
@@ -895,10 +898,31 @@ for _set, _files in STORED_SETS.items():
             "--heldout {params.heldout} --record {output} "
             "--file {params.files}"
 
+    rule:
+        name:
+            f"promote_paper_{_set}"
+        input:
+            f"{R}/released/{_set}.json",
+        output:
+            f"{R}/promoted/{_set}.json",
+        log:
+            f"{R}/logs/promote_paper_{_set}.log",
+        # gh and git: runs on the driver's host.
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            branches=PROMOTE_BRANCHES,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe.stored promote --released {input} "
+            "--record {output} --branches {params.branches}"
+
 
 rule paper_inputs:
     input:
-        [f"{R}/released/{name}.json" for name in STORED_SETS],
+        [f"{R}/promoted/{name}.json" for name in STORED_SETS],
 
 
 # The paper reads `build`, so it shows the last run published.

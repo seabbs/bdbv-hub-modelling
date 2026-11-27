@@ -87,6 +87,11 @@ def ft_check_record(wc):
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
+
+
+# The branches a promote rule runs from (`promote_branches`, the
+# paper's config).
+PROMOTE_BRANCHES = " ".join(config["promote_branches"])
 # A mailbox line, when NOTIFY is set.
 say = functools.partial(notify.post, cfg=LOCAL)
 

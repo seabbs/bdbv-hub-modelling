@@ -30,6 +30,10 @@ rounds_dir: $ROOT/rounds
 # run name) whose newest scored checkpoints the SI comparisons and
 # tables show as preliminary.
 live_run: runa
+# The branches whose commits may promote an endpoint (the release
+# `<endpoint>-main` naming its current version, `nowcastutils.pointers`):
+# rules promote_main and promote_paper_<set> refuse any other commit.
+promote_branches: [main, next]
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
