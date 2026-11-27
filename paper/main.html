@@ -247,18 +247,19 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Surveillance data for nowcasting are a reporting triangle, counts by reference date, such as the date of symptom onset, and by reporting delay, in which recent dates have only their shortest delays reported so far <span class="citation" data-cites="hohle Wolffram2023">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
-<li>We gave Chronos-2 one count series per place, complete up to the last date whose counts have settled, and one lag series per place and reporting delay, each missing until reported (Figure 1B).</li>
-<li>Counts reported after that date are inputs whose future values are already known.</li>
+<li>Surveillance data for nowcasting are a reporting triangle: counts are reported by reference date, such as the date of symptom onset, and by reporting delay, where the most recent dates are incomplete because counts that have longer delays have not been reported yet <span class="citation" data-cites="hohle Wolffram2023">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series is complete up to the last date E.</li>
+<li>We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The count series only has values up to E, whereas the lagged series can have values up to the latest data release.</li>
+<li>The last complete date E, corresponds to the latest data release minus the number of lagged series</li>
+<li>Values of the lagged series up to E are past inputs, and values after E are known future inputs, which the model can use to forecast the count series.</li>
 <li>Places nest, such as health zones within provinces within a country.</li>
-<li>Chronos-2 forecasts every place and its lag series together, in one group we call a block.</li>
-<li>Without more information, the model cannot tell which lag series belong to which place’s count.</li>
-<li>We added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (Figure 1B; Supporting Information, <em>Attention biases</em>).</li>
-<li>At forecast time we set the number of lag series per place, <span class="math inline">\(D\)</span>, from the data (Supporting Information, <em>Lag count</em>).</li>
-<li>Each reference date first published after releases began settles at the first reporting delay at which its reported count reaches 98% of its latest count.</li>
-<li><span class="math inline">\(D\)</span> is one more than the 98th percentile of these settling delays, using only dates seen for at least <span class="math inline">\(1.5D\)</span> days.</li>
-<li>With no such date, <span class="math inline">\(D\)</span> is the release history.</li>
-<li>A study can fix <span class="math inline">\(D\)</span> instead.</li>
+<li>Chronos-2 takes every place’s count and lagged series together, in one group we call a block. It then forecasts every place’s count series.</li>
+<li>The model can tell whether a series is a count series or a lagged series, because the lagged series are input as covariates. The model can also implicitly learn what length of reporting delay each lagged series represents by the number of missing data points.</li>
+<li>However, the model is unable to tell which lagged series belong to which place’s count series, or which places are related, such as a province and its health zones as they are all input into the same block.</li>
+<li>To address this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (Figure 1B; Supporting Information, <em>Attention biases</em>).</li>
+<li>At forecast time we set the number of lagged series per place, <span class="math inline">\(D\)</span>. This is either estimated from the data, where enough data is available, or set by the user for their setting.</li>
+<li>To estimate <span class="math inline">\(D\)</span>, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. <span class="math inline">\(D\)</span> is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least <span class="math inline">\(1.5D\)</span> days.</li>
+<li>If not enough data is available for any of the refernce dates to settle, <span class="math inline">\(D\)</span> defaults to the whole release history (Supporting Information, <em>Lag count</em>).</li>
 <li>Key references: <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
 </ul>
 </div>
