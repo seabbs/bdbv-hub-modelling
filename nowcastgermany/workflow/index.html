@@ -485,10 +485,11 @@
 The <code>nowcastgermany</code> command fetches the hub's data (<code>fetch</code>), runs the benchmark (<code>backtest</code>) and reads the hub teams' forecasts (<code>teams</code>).</p>
 <p>In the <a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md">workflow</a>, <code>germany_triangle</code> fetches the triangle.
 <code>score_germany</code> and <code>score_run_germany</code> score each fine-tuned checkpoint on it with <code>nowcastgermany.checkpoint</code>.
-<code>real_training_blocks</code> cuts the German training blocks for the real-data ablation with <code>nowcastgermany.finetune_blocks</code>.
-<code>publish_germany_unit</code> attaches a checkpoint's German forecasts to its release (<code>nowcastgermany unit-publish</code>).</p>
-<p>The <a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/paper/workflow/Snakefile">paper workflow</a> runs the German study in <code>germany_fetch</code>, <code>germany_development</code> and <code>germany_heldout</code>.</p>
-<p>The <a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/pages.yml">Site workflow</a> loads the pinned checkpoint's stored forecasts (<code>ft-tag</code>, <code>ft-load</code>), scores the hub teams (<code>teams</code>, <code>asof</code>, <code>paper</code>) and builds the <a href="https://samabbott.co.uk/bdbv-hub-modelling/germany/">German nowcast benchmark</a> page.</p>
+<code>real_training_blocks</code> cuts the German training blocks for the real-data ablation with <code>nowcastgermany.finetune_blocks</code>.</p>
+<p>The <a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/paper/workflow/Snakefile">paper workflow</a> runs the German study in <code>germany_fetch</code>, <code>germany_development</code> and <code>germany_heldout</code>.
+<code>germany_development</code> stacks the reference unit and the final checkpoint's unit as our development forecasts (<code>nowcastgermany units</code>), with no backtest of its own.
+<code>release_paper_germany</code> publishes them in the <code>paper-germany-&lt;hash&gt;</code> release.</p>
+<p>The <a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/site-results.yml">Site results workflow</a> loads our forecasts from the <code>paper-germany</code> release the paper reads (<code>stored-load</code>), scores the hub teams (<code>teams</code>, <code>asof</code>, <code>paper</code>) and builds the <a href="https://samabbott.co.uk/bdbv-hub-modelling/germany/">German nowcast benchmark</a> page.</p>
 
 
 
