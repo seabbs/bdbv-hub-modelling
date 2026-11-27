@@ -593,7 +593,7 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
 
     seen: list[tuple[int, ...]] = []
 
-    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS, max_delay=None):
+    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS, **_kwargs):
         seen.append(tuple(horizons))
         return []
 
