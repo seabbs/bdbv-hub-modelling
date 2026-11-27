@@ -152,18 +152,19 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Model inputs
 
 ::: {.callout-note title="Plan"}
-- Surveillance data for nowcasting are a reporting triangle, counts by reference date, such as the date of symptom onset, and by reporting delay, in which recent dates have only their shortest delays reported so far [@hohle; @Wolffram2023].
-- We gave Chronos-2 one count series per place, complete up to the last date whose counts have settled, and one lag series per place and reporting delay, each missing until reported (Figure 1B).
-- Counts reported after that date are inputs whose future values are already known.
+- Surveillance data for nowcasting are a reporting triangle: counts are reported by reference date, such as the date of symptom onset, and by reporting delay, where the most recent dates are incomplete because counts that have longer delays have not been reported yet [@hohle; @Wolffram2023].
+- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series is complete up to the last date E. 
+- We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The count series only has values up to E, whereas the lagged series can have values up to the latest data release. 
+- The last complete date E, corresponds to the latest data release minus the number of lagged series
+- Values of the lagged series up to E are past inputs, and values after E are known future inputs, which the model can use to forecast the count series.
 - Places nest, such as health zones within provinces within a country.
-- Chronos-2 forecasts every place and its lag series together, in one group we call a block.
-- Without more information, the model cannot tell which lag series belong to which place's count.
-- We added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
-- At forecast time we set the number of lag series per place, $D$, from the data (Supporting Information, *Lag count*).
-- Each reference date first published after releases began settles at the first reporting delay at which its reported count reaches 98% of its latest count.
-- $D$ is one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
-- With no such date, $D$ is the release history.
-- A study can fix $D$ instead.
+- Chronos-2 takes every place's count and lagged series together, in one group we call a block. It then forecasts every place's count series.
+- The model can tell whether a series is a count series or a lagged series, because the lagged series are input as covariates. The model can also implicitly learn what length of reporting delay each lagged series represents by the number of missing data points.
+- However, the model is unable to tell which lagged series belong to which place's count series, or which places are related, such as a province and its health zones as they are all input into the same block.
+- To address this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
+- At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user  for their setting.
+- To estimate $D$, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. $D$ is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
+- If not enough data is available for any of the refernce dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
 - Key references: [@Woo2024; @Yang2022].
 :::
 
