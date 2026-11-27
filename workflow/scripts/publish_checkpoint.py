@@ -2,7 +2,8 @@
 
     python workflow/scripts/publish_checkpoint.py CHECKPOINT OUT
     python workflow/scripts/publish_checkpoint.py --held-out CHECKPOINT OUT
-    python workflow/scripts/publish_checkpoint.py --main RUN CHECKPOINT OUT
+    python workflow/scripts/publish_checkpoint.py --main RUN CHECKPOINT OUT \
+        BRANCH...
 
 CHECKPOINT is a run's `n<N>/` folder. A checkpoint with the series bias
 is released as `chronos-slots-<hash>`, else `chronos-ft-<hash>`. Safe
@@ -13,6 +14,7 @@ uploaded to it beside its settings, and OUT records the tag. With
 `--main`, released checkpoint CHECKPOINT of the main fine-tuning run RUN
 (the paper's `live_run`) becomes the one the fine-tuned models load: the
 release `chronos-main` names it (`fs.promote_main`), and OUT records it.
+Only a commit on one of the BRANCHes promotes (`nowcastutils.pointers`).
 CHECKPOINT needs only its `settings.json`, so a checkpoint is promoted
 from a folder holding its release's `settings.json` too.
 """
@@ -49,7 +51,9 @@ def main() -> None:
         held_out(Path(sys.argv[2]), Path(sys.argv[3]))
         return
     if sys.argv[1] == "--main":
-        record = fs.promote_main(Path(sys.argv[3]), sys.argv[2])
+        record = fs.promote_main(
+            Path(sys.argv[3]), sys.argv[2], tuple(sys.argv[5:])
+        )
         Path(sys.argv[4]).write_text(json.dumps(record) + "\n")
         return
     where, out = Path(sys.argv[1]), Path(sys.argv[2])

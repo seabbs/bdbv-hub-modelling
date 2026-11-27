@@ -504,18 +504,18 @@ def test_every_release_s_fit_compiles_one_shape(snap24, monkeypatch) -> None:
     # so JAX compiles them once a task, not once a release; the counts
     # are those of the releases up to each one alone.
     seen: dict[str, set] = {"rows": set(), "pairs": set()}
-    real_pre, real_pairs = delays.preprocess_negative_values, delays.pair_sums
+    real_pre, real_pairs = delays._preprocess, delays._pair_sums
 
-    def pre(rows, mask, validate=True):
+    def pre(rows, mask):
         seen["rows"].add(np.shape(rows))
-        return real_pre(rows, mask, validate=validate)
+        return real_pre(rows, mask)
 
     def pairs(counts, observed, cut, first, max_delay):
         seen["pairs"].add(np.shape(first))
         return real_pairs(counts, observed, cut, first, max_delay)
 
-    monkeypatch.setattr(delays, "preprocess_negative_values", pre)
-    monkeypatch.setattr(delays, "pair_sums", pairs)
+    monkeypatch.setattr(delays, "_preprocess", pre)
+    monkeypatch.setattr(delays, "_pair_sums", pairs)
     n_rel = snap24.counts.shape[1]
     for r in range(1, n_rel):
         np.testing.assert_array_equal(
@@ -523,4 +523,4 @@ def test_every_release_s_fit_compiles_one_shape(snap24, monkeypatch) -> None:
         )
         fit_delay(snap24, r, Settings())
     assert len(seen["rows"]) == 1
-    assert len(seen["pairs"]) <= 2
+    assert len(seen["pairs"]) == 1

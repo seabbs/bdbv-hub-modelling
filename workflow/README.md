@@ -92,6 +92,22 @@ Settings that are the same on every machine are in `workflow/config.yaml`; overr
 Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
 Each machine reruns its task as releases land, in its coordinator run (`task workflow:run`).
 
+### Endpoint releases
+
+Each key endpoint that other machines or CI read has one stable release, `<endpoint>-main`, whose asset `main.json` names its current version.
+The record holds the version's release `tag`, its `hash`, the `commit` and step that made it (`produced_by`) and `promoted_at`.
+Each version keeps its own hashed release; the pointer only names one.
+
+| Pointer release | Names | Promoted by (target) | Read by |
+|---|---|---|---|
+| `chronos-main` | the main run's (`live_run`) newest released checkpoint, `chronos-slots-<hash>` or `chronos-ft-<hash>` | `promote_main` (`publish`) | the fine-tuned models (`hash = "latest"`), the Fit store, the submission and Site results (`bdbvhub finetuned-checkpoint`) |
+| `paper-synthetic-main`, `paper-finetune-main`, `paper-simulations-main`, `paper-germany-main` | each stored paper set's `paper-<set>-<hash>` | `promote_paper_<set>` (`paper_inputs`) | the Pages paper build (`paperpipe.stored fetch`) |
+
+A promote rule follows the rule that releases its version, so a new version reruns it.
+It promotes only from a commit on one of `promote_branches` (`paper/workflow/config.yaml`), and only a version whose release exists.
+Readers fail when a pointer names no release and never take the newest release of a prefix instead.
+The shared code is `nowcastutils.pointers`.
+
 ## 1. Simulate (`rules/simulate.smk`)
 
 Round r is `batches` batches of `batch` outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
@@ -144,7 +160,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`). It never waits for the checkpoint's held-out losses.
-- `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
+- `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`, [Endpoint releases](#endpoint-releases)), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
 - `ft_check_release`: a saved checkpoint's BDBV check page (`ft_check_page`), named by the hash in its settings (`<ck>/ft-check.done`). A fine-tuned checkpoint's BDBV check forecast waits for its release.
 - `release_held_out`: an offloaded checkpoint's held-out losses (`held-out.json`), uploaded to its release once scored (`<ck>/held-out-released.txt`).
 - `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `packages/nowcastfoundation/config/finetune.toml` pins.
@@ -179,6 +195,7 @@ Reports read the other steps' outputs back for people, each with one script.
 - `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
 - `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
 - `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them. `sim_diseases` gives the grid's training rounds' ranges against the published values by disease (`report/sim-diseases.csv`), for the SI's disease table.
+- `delay_reference`: the structure of the reporting delays (`flowlib.delay_structure`) in the German development half (the states as the national series' children) and the BDBV hub's usable releases (a cumulative first release left out, as in the backtests, with `packages/nowcastbdbv/config/backtest.toml`'s `max_delay`; the provinces as the country's children), `rounds/report/delay-reference.json`: the delay over time by reference and release week, its weekday effects, its spread between strata and the release cadence with the wait it adds. The sim reports compare the simulations' with it, and so does the simulations dashboard once it is built.
 - `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
 - `hub_rounds`: our last `hub_rounds.rounds` hub rounds against every hub team on the hub's latest data, `<ROOT>/hub/hub-rounds.html` (`hub_rounds_report`, `workflow/scripts/hub_rounds_report.py`), copied to `REVIEW_DIR` when set. `hub_data` tidies the hub's data, `hub_submissions_table` reads which chain model went out from the ledger branch, and `hub_comparison` scores the hub's files as submitted beside `hub_rounds.models` as the fit store holds them for each round (`fit-store load --models`, then `compare-hub`). They rerun when `<ROOT>/hub/head.txt` changes, which `workflow/scripts/hub_watch.sh` writes when the hub's data commit moves before it builds the target. Not part of `all`.
 - `hub_head`: the hub's data commit (`<ROOT>/hub/head.txt`) when a host has none, fetched with `gh`; `workflow/scripts/hub_watch.sh` keeps it current. `hub_data` reads the hub with the `gh` token.
@@ -205,7 +222,8 @@ Its sources are each round's `rounds/r<N>/sims/` and each run's `runs/<run>/sims
 Each simulation is summarised from its first observation draw, every stratum summed: its grid factors and drawn values, each under its grid layer (infections, strata, observation, delays, reporting), its cases, strata, weeks, peak, mean delay and share reported within 7 days, and its weekly counts by reference date.
 A batch is summarised once and cached in `<DASHBOARD_ROOT>/dashboard/sims/` until its files change; the index is refreshed every `dashboard.refresh_every` seconds.
 The page has a summary (tiles and medians by the levels of a chosen factor), each layer's factors and drawn values against the whole source, every simulation's weekly counts on one panel and one panel per level, and a table.
-Clicking a level, a histogram bin or a table row filters or selects; a deep dive shows one simulation's counts by stratum, its counts as known at three cut-offs, its delays, its reporting triangle, its infections, onsets and R where the batch kept them, and its settings by layer.
+Its delays' structure (`flowlib.delay_structure`) is summarised with it: the delay over the series, by weekday of reference and report, between strata and with the release cadence. The page's delay section shows these against the German and BDBV values (`rounds/report/delay-reference.json`, the `delay_reference` rule) where they are built.
+Clicking a level, a histogram bin or a table row filters or selects; a deep dive shows one simulation's counts by stratum, its counts as known at three cut-offs, its delays, its reporting triangle, its delays by reference and release week, by weekday, by stratum and its release gaps against Germany's and BDBV's, its infections, onsets and R where the batch kept them, and its settings by layer.
 `task workflow:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (training loss, and validation loss on the full held-out set at step 0 and each checkpoint, by part, layout and level), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -236,7 +254,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.
 - Progress figures: `progress_runa`, `progress_noslots`, `progress_nodelays` and `progress_realdata`, one per paper run (`live_run` and `comparisons` in `paper/workflow/config.yaml`), from the run's `run_progress` and `horizon_table` tables, or on Pages from the stored copies in the `finetune` set.
-- Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, gathered by the opt-in target `paper_inputs`.
+- Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, and `promote_paper_synthetic`, `promote_paper_finetune`, `promote_paper_simulations` and `promote_paper_germany` name it in `paper-<set>-main` ([Endpoint releases](#endpoint-releases)), gathered by the opt-in target `paper_inputs`.
 
 ## A fine-tuning run
 

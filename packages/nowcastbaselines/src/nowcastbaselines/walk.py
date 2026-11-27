@@ -50,6 +50,9 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
+from nowcastbaselines.draws import poisson
+from nowcastutils.shapes import bucket
+
 __all__ = [
     "DailySteps",
     "random_walk",
@@ -222,11 +225,18 @@ def random_walk(
     return lam, jax.random.poisson(k_count, lam).astype(x0.dtype)
 
 
-@partial(jax.jit, static_argnums=3)
 def random_walks(
-    keys: Array, x0: Array, sigma: Array, h: int, mean: Array | None = None
-) -> tuple[Array, Array]:
+    keys: Array,
+    x0: Array | np.ndarray,
+    sigma: Array | np.ndarray,
+    h: int,
+    mean: Array | np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """Draw `random_walk` for each place, compiled as one program.
+
+    The steps are padded to `nowcastutils.shapes.bucket` of `h`, so one
+    program serves every `h` of a size. The draws are those of
+    `random_walk` over `h` steps (`_padded_walks`).
 
     Parameters
     ----------
@@ -244,13 +254,61 @@ def random_walks(
 
     Returns
     -------
-    tuple of jax.Array
+    tuple of numpy.ndarray
         The rates and the Poisson counts, each `[L, S, h]`.
     """
-    if mean is None:
-        return jax.vmap(lambda k, x, s: random_walk(k, x, s, h))(
-            keys, x0, sigma
-        )
-    return jax.vmap(lambda k, x, s, m: random_walk(k, x, s, h, m))(
-        keys, x0, sigma, mean
+    x = np.asarray(x0)
+    n_loc, width = x.shape[0], bucket(h)
+    spread = np.asarray(sigma, x.dtype)
+    if spread.ndim == 1:
+        spread = np.repeat(spread[:, None], h, axis=1)
+    pad = ((0, 0), (0, width - h))
+    shift = (
+        np.zeros((n_loc, width), x.dtype)
+        if mean is None
+        else np.pad(np.asarray(mean, x.dtype), pad)
     )
+    lam, y = _padded_walks(
+        keys, x, np.pad(spread, pad), shift, np.int32(h), mean is not None
+    )
+    return np.asarray(lam)[:, :, :h], np.asarray(y)[:, :, :h]
+
+
+@partial(jax.jit, static_argnums=5)
+def _padded_walks(
+    keys: Array,
+    x0: Array,
+    sigma: Array,
+    mean: Array,
+    h: Array,
+    shifted: bool,
+) -> tuple[Array, Array]:
+    r"""Draw `random_walk` over `h` steps of `[L, H]` padded ones.
+
+    JAX draws each element of an array from its flat index alone, so the
+    draws of `random_walk`'s `[S, h]` steps are the first $S h$ of `[S H]`
+    flat draws, read at index $s h + j$. The steps after `h` read draws
+    of no step, and are cut off by `random_walks`. The counts are drawn
+    as the unpadded ones (`draws.poisson`). `h` is traced, so one program
+    serves every `h` up to `H`.
+    """
+    n, width = x0.shape[1], sigma.shape[1]
+    j = jnp.arange(width)[None, :]
+    at = jnp.arange(n)[:, None] * h + j
+    real = j < h
+    flat = jnp.where(real, at, n * width)
+    cells = jnp.arange(n * width)
+
+    def one(key: Array, x: Array, s: Array, m: Array) -> tuple[Array, Array]:
+        k_step, k_count = jax.random.split(key)
+        z = jax.random.normal(k_step, (n * width,), x.dtype)
+        steps = s * jnp.take(z, at, mode="clip")
+        if shifted:
+            steps = steps + m
+        level = jnp.log1p(x)[:, None] + jnp.cumsum(steps, axis=1)
+        lam = jnp.expm1(jnp.maximum(level, 0.0))
+        rates = jnp.zeros(n * width, x.dtype).at[flat].set(lam, mode="drop")
+        drawn = poisson(k_count, rates, cells < n * h).astype(x.dtype)
+        return lam, jnp.where(real, jnp.take(drawn, at, mode="clip"), 0.0)
+
+    return jax.vmap(one)(keys, x0, sigma, mean)
