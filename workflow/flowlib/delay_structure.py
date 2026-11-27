@@ -40,6 +40,9 @@ TIME_BINS = 10
 GAP_BINS = 8
 """Release gaps of 1 to 7 days, then 8 or more."""
 
+DELAY_POINTS = (0, 1, 2, 3, 5, 7, 10, 14, 21, 28, 42)
+"""The delays (days) the delay distribution's cumulative share is kept at."""
+
 MAX_STRATA = 40
 """The most strata `structure` lists, the largest first."""
 
@@ -74,6 +77,15 @@ def _summary(rows: pd.DataFrame) -> dict[str, Any]:
         "mean": _r(float((by.index * by).sum()) / n),
         **{f"q{int(q * 100)}": _quantile(by, q) for q in (0.1, 0.5, 0.9)},
     }
+
+
+def _cdf(rows: pd.DataFrame) -> list[float | None]:
+    """Return the share reported by each of `DELAY_POINTS`."""
+    by = _by_delay(rows)
+    total = by.sum()
+    if total <= 0:
+        return [None] * len(DELAY_POINTS)
+    return [_r(by[by.index <= d].sum() / total, 4) for d in DELAY_POINTS]
 
 
 def _weekly(rows: pd.DataFrame, key: str, first: pd.Timestamp) -> dict:
@@ -197,13 +209,14 @@ def structure(
 
     Keys: `horizon` (the 95% delay, days), `first`, `last_ref` and
     `last_rep`; `overall` (count, mean and 10, 50 and 90% delays of the
-    complete reference dates); `by_ref` and `by_rel` (the same by week
-    of reference date, and by week of report over the complete
-    releases); `time` (the mean in each of `TIME_BINS` equal parts of
-    the complete reference span); `dow` (`ref_delay`, each reference
-    weekday's mean delay less the mean of the seven; `ref_share` and
-    `rep_share`, counts by weekday of reference and of report over their
-    mean; `release_days`, the share of releases on each weekday);
+    complete reference dates) and `cdf` (`_cdf` of the same); `by_ref`
+    and `by_rel` (the same by week of reference date, and by week of
+    report over the complete releases); `time` (the mean in each of
+    `TIME_BINS` equal parts of the complete reference span); `dow`
+    (`ref_delay`, each reference weekday's mean delay less the mean of
+    the seven; `ref_share` and `rep_share`, counts by weekday of
+    reference and of report over their mean; `release_days`, the share
+    of releases on each weekday);
     `strata` (the total, then each parent with its children); and
     `releases` (`_releases`).
     """
@@ -236,6 +249,7 @@ def structure(
         "last_ref": last_ref.strftime("%Y-%m-%d"),
         "last_rep": last_rep.strftime("%Y-%m-%d"),
         "overall": _summary(complete),
+        "cdf": _cdf(complete),
         "by_ref": _weekly(complete, "ref", first),
         "by_rel": _weekly(released, "rep", first),
         "time": time,
@@ -313,17 +327,22 @@ def scalars(s: dict[str, Any]) -> dict[str, float | None]:
 def curves(s: dict[str, Any]) -> dict[str, list[float | None]]:
     """Return a structure's fixed-length curves.
 
-    `delay_time`: each part's mean delay over the overall mean.
-    `ref_delay` and `release_days`: as in `structure`'s `dow`. `gaps`:
+    `cdf`: the share reported by each of `DELAY_POINTS`. `delay_time`:
+    each part's mean delay over the overall mean. `ref_delay` and
+    `release_days`: as in `structure`'s `dow`; `refdow` and `repdow` its
+    `ref_share` and `rep_share`. `gaps`:
     the share of release gaps of 1 to 7 and 8 or more days.
     """
     mean = s["overall"]["mean"]
     return {
+        "cdf": s["cdf"],
         "delay_time": [
             _r(v / mean) if v is not None and mean else None for v in s["time"]
         ]
         or [None] * TIME_BINS,
         "ref_delay": s["dow"]["ref_delay"],
+        "refdow": s["dow"]["ref_share"],
+        "repdow": s["dow"]["rep_share"],
         "release_days": s["dow"]["release_days"],
         "gaps": s["releases"]["gaps"] or [None] * GAP_BINS,
     }
