@@ -456,13 +456,24 @@ def test_the_evaluation_s_workers_come_from_the_environment(monkeypatch):
     assert fe.evaluate_workers("mps") == 1
 
 
+def _approx(value):  # type: ignore[no-untyped-def]
+    """Return `value` with every float compared to a relative 1e-6."""
+    if isinstance(value, dict):
+        return {k: _approx(v) for k, v in value.items()}
+    if isinstance(value, float):
+        return pytest.approx(value, rel=1e-6, abs=1e-12)
+    return value
+
+
 @pytest.mark.parametrize(
     "kinds", [["start"], ["checkpoint"], ["monitor", "by_source"]]
 )
 def test_a_split_evaluation_gives_what_one_process_does(tmp_path, kinds):
     # The batches are those one process runs, split over the workers,
-    # so every loss and the coverage are the same, bit for bit. The
-    # workers are fresh interpreters, loading the tiny Chronos-2 by name.
+    # so every loss and the coverage are the same up to float rounding:
+    # a worker's torch threads differ from the coordinator's, which can
+    # change the order of CPU reductions (about 1e-8 here). The workers
+    # are fresh interpreters, loading the tiny Chronos-2 by name.
     from chronos_toy import toy_base
 
     val = blocks(7)
@@ -476,5 +487,5 @@ def test_a_split_evaluation_gives_what_one_process_does(tmp_path, kinds):
         series_bias.attach_for(base, where / "adapter")
         split = fe.Split(n, path, len(val), toy_base)
         got[n] = fe.evaluate(where / "adapter", base, val, kinds, 2, split)
-    assert got[1] == got[3]
+    assert got[3] == _approx(got[1])
     assert got[1]
