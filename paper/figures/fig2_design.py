@@ -9,12 +9,13 @@ and, with `--png`, a 200 dpi `fig2-design.png` with `rsvg-convert`
 
 The panels are:
 
-- A, what we fine-tune Chronos-2 on, one row per fine-tuned model, each
-  marked main text or Supporting Information, from base Chronos-2;
-- B, how the models are used: models and their inputs by application
-  (held-out simulations, the German nowcast hub and the Ebola
-  forecasting hub), each cell marked main text or Supporting
-  Information, and left empty where the model does not apply.
+- A, what we fine-tune Chronos-2 on: base Chronos-2, LoRA, and one box
+  per fine-tuned model with a small input block glyph, marked main text
+  (filled dot) or Supporting Information (outlined dot);
+- B, how the models are used: rows by model, columns by study (held-out
+  simulations, the German nowcast hub and the Ebola forecasting hub),
+  each cell marked main text or Supporting Information, starred where
+  submitted to the Ebola hub, and empty where the model does not apply.
 
 It reuses the drawing helpers and palette of Figure 1
 (`fig1_pipeline.py`). Units are points at the final size, 6.5 inches
@@ -24,6 +25,7 @@ wide, so font sizes are the printed sizes.
 from __future__ import annotations
 
 import argparse
+import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -52,52 +54,58 @@ OUT = Path(__file__).resolve().parent / "fig2-design"
 # The role of a fine-tuned model or a cell: main text or SI.
 MAIN = "main"
 SI = "si"
+ALL_BIASES = ("same", "parent")
 
 
-def badge(g: Svg, x: float, y: float, role: str) -> float:
-    """Draw a Main (filled) or SI (outlined) badge; return its width."""
-    w, h = 24.0, 10.0
-    if role == MAIN:
-        g.rect(x, y, w, h, fill=ACCENT, stroke=ACCENT, sw=0.8, rx=2)
-        colour, name = "white", "Main"
-    else:
-        g.rect(x, y, w, h, fill="white", stroke=ACCENT, sw=0.8, rx=2)
-        colour, name = ACCENT, "SI"
-    g.text(
-        x + w / 2,
-        y + 7.3,
-        name,
-        size=SMALL - 0.5,
-        anchor="middle",
-        fill=colour,
-        weight="bold",
+def role_dot(g: Svg, cx: float, cy: float, role: str) -> None:
+    """Draw a main text (filled) or SI (outlined) dot."""
+    fill = ACCENT if role == MAIN else "white"
+    g.add(
+        f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="3.1" fill="{fill}" '
+        f'stroke="{ACCENT}" stroke-width="0.9"/>'
     )
-    return w
 
 
-def _layout(
-    g: Svg, x: float, y: float, lags: bool, biases: tuple[str, ...]
+def star(g: Svg, cx: float, cy: float, r: float = 3.6) -> None:
+    """Draw a five-pointed star, the mark of an Ebola hub submission."""
+    pts = []
+    for k in range(10):
+        rad = r if k % 2 == 0 else r * 0.45
+        a = math.pi * (k / 5 - 0.5)
+        pts.append(f"{cx + rad * math.cos(a):.2f},{cy + rad * math.sin(a):.2f}")
+    g.add(f'<polygon points="{" ".join(pts)}" fill="{COV}"/>')
+
+
+def mini(
+    g: Svg,
+    x: float,
+    y: float,
+    lags: bool,
+    biases: tuple[str, ...],
+    cw: float = 4.2,
+    rh: float = 3.0,
 ) -> None:
     """Draw a small input block: a target row and, optionally, lag rows.
 
-    Cells are shaded as in Figure 1 (`cell`), drawn finer at this size.
-    Bars to the left mark the attention biases, in Figure 1's colours:
-    the same-place bias (`same`) and the parent and child biases
-    (`parent`).
+    Cells are shaded as in Figure 1. The bars to the left mark the
+    attention biases in Figure 1's colours, the same-place bias (`same`)
+    and the parent and child biases (`parent`). The block starts at `x`
+    plus room for the bars.
     """
-    cols, cw, rh = 7, 4.6, 3.2
+    cols = 7
     rows = [["final" if c < 4 else "future" for c in range(cols)]]
     if lags:
-        for d in range(3):
-            rows.append(
-                ["lag" if d <= c < cols - d else "none" for c in range(cols)]
-            )
+        rows += [
+            ["lag" if c < 5 - d else "none" for c in range(cols)]
+            for d in range(3)
+        ]
     style = {
         "final": (CELL, "white"),
         "future": (ACCENT_SOFT, ACCENT),
         "lag": (COV_SOFT, COV),
         "none": (PANEL, "white"),
     }
+    bx = x + 7
     yy = y
     for k, row in enumerate(rows):
         if k == 1:
@@ -105,64 +113,34 @@ def _layout(
         for c, kind in enumerate(row):
             fill, edge = style[kind]
             g.rect(
-                x + c * cw, yy, cw, rh, fill=fill, stroke=edge, sw=0.35, rx=0.6
+                bx + c * cw, yy, cw, rh, fill=fill, stroke=edge, sw=0.35, rx=0.5
             )
-        yy += rh + 0.6
+        yy += rh + 0.5
+    # Bars at least 7 points tall, centred on the block.
+    h = yy - y - 0.5
+    bh = max(h, 7.0)
     bars = (("same", SLOTS[0]), ("parent", PARENT_SLOT))
     for k, (kind, colour) in enumerate(bars):
         if kind in biases:
-            g.rect(x - 4 - 3 * k, y, 2.2, yy - y - 0.6, fill=colour, rx=1.1)
+            g.rect(x + 3 * k, y + (h - bh) / 2, 2.0, bh, fill=colour, rx=1.0)
 
 
-# What each fine-tuned model is trained on (panel A): its source, a
-# description, its name in panel B, the role, whether its blocks have lag
-# series and which attention biases it has.
-ALL_BIASES = ("same", "parent")
+def block_height(lags: bool, rh: float = 3.0) -> float:
+    """Return the height of a `mini` block."""
+    return rh + (3 * (rh + 0.5) + 1 if lags else 0)
+
+
+# The fine-tuned models (panel A): name, data, role, lag series, biases.
+SIMULATED = ["simulated"]
 FINETUNES = (
-    (
-        "Simulated surveillance data",
-        "reporting triangle, with all attention biases",
-        "Fine-tuned",
-        MAIN,
-        True,
-        ALL_BIASES,
-    ),
-    (
-        "Simulated data, no attention biases",
-        "reporting triangle only",
-        "No biases",
-        SI,
-        True,
-        (),
-    ),
-    (
-        "Simulated data, same-place bias only",
-        "reporting triangle, no parent or child biases",
-        "Same place only",
-        SI,
-        True,
-        ("same",),
-    ),
-    (
-        "Simulated data, parent and child biases only",
-        "reporting triangle, no same-place bias",
-        "Parent and child only",
-        SI,
-        True,
-        ("parent",),
-    ),
-    (
-        "Simulated data as complete counts",
-        "no lag series, with all attention biases",
-        "No lags",
-        SI,
-        False,
-        ALL_BIASES,
-    ),
+    ("All biases", SIMULATED, MAIN, True, ALL_BIASES),
+    ("No biases", SIMULATED, SI, True, ()),
+    ("Same place only", SIMULATED, SI, True, ("same",)),
+    ("Parent and child only", SIMULATED, SI, True, ("parent",)),
+    ("No lags", SIMULATED, SI, False, ALL_BIASES),
     (
         "Real data",
-        "German development half, Ebola hub releases",
-        "Real data",
+        ["Germany to 9 Feb 2022", "Ebola hub to 8 Nov 2026"],
         SI,
         True,
         ALL_BIASES,
@@ -173,227 +151,188 @@ FINETUNES = (
 def panel_a(g: Svg, oy: float) -> float:
     """Draw panel A, what we fine-tune Chronos-2 on."""
     g.label(0, oy + 9, "A", "What we fine-tune Chronos-2 on")
-    top = oy + 26
-    rh, gap = 20.0, 3.0
-    n = len(FINETUNES)
-    bottom = top + n * rh + (n - 1) * gap
-    # Base Chronos-2, the start of every fine-tune, also used zero-shot.
-    bw = 82.0
-    by = top + 8
-    bh = bottom - top - 16
-    g.rect(0, by, bw, bh, fill=PANEL, stroke=LINE, sw=0.7, rx=3)
-    g.text(
-        bw / 2,
-        by + 18,
-        "Chronos-2",
-        size=HEAD,
-        weight="bold",
-        anchor="middle",
-    )
-    g.text(
-        bw / 2,
-        by + 29,
-        ["pretrained", "weights"],
-        size=SMALL,
-        anchor="middle",
-        fill=MUTED,
-        lead=1.2,
-    )
-    g.text(
-        bw / 2,
-        by + bh - 26,
-        ["used zero-shot,", "no fine-tuning"],
-        size=SMALL,
-        anchor="middle",
-        fill=FG,
-        lead=1.2,
-    )
-    badge(g, bw / 2 - 12, by + bh - 14, MAIN)
-    # The LoRA fine-tunes fan out to the rows.
-    rx = 116.0
-    g.text(
-        (bw + rx) / 2,
-        top - 3,
-        "LoRA fine-tune",
-        size=SMALL,
-        anchor="middle",
-        fill=MUTED,
-    )
+    top = oy + 24
+    bh, gap = 32.0, 5.0
+    nrow = 3
+    bottom = top + nrow * bh + (nrow - 1) * gap
     mid = (top + bottom) / 2
-    for k, (head, words, name, role, lags, biases) in enumerate(FINETUNES):
-        y = top + k * (rh + gap)
-        g.path(
-            f"M{bw:.2f},{mid:.2f} C{bw + 16:.2f},{mid:.2f} "
-            f"{rx - 22:.2f},{y + rh / 2:.2f} {rx - 7:.2f},{y + rh / 2:.2f}",
-            stroke=ACCENT if role == MAIN else MUTED,
-            sw=1.1 if role == MAIN else 0.7,
-        )
-        g.line(
-            rx - 8,
-            y + rh / 2,
-            rx - 2,
-            y + rh / 2,
-            stroke=ACCENT if role == MAIN else MUTED,
-            sw=1.1 if role == MAIN else 0.7,
-            arrow="aha" if role == MAIN else "ah",
-        )
+    # Base Chronos-2, the start of every fine-tune.
+    cw, ch = 64.0, 34.0
+    g.rect(0, mid - ch / 2, cw, ch, fill=PANEL, stroke=LINE, sw=0.7, rx=3)
+    g.text(
+        cw / 2, mid - 1, "Chronos-2", size=HEAD, weight="bold", anchor="middle"
+    )
+    g.text(
+        cw / 2, mid + 9, "pretrained", size=SMALL, fill=MUTED, anchor="middle"
+    )
+    # One LoRA arrow to a bracket over the fine-tuned models.
+    gx = 112.0
+    g.line(cw + 2, mid, gx - 8, mid, arrow="ah")
+    g.text(
+        (cw + gx - 6) / 2,
+        mid - 4,
+        "LoRA",
+        size=SMALL,
+        fill=MUTED,
+        anchor="middle",
+    )
+    g.rect(
+        gx - 6,
+        top - 5,
+        WIDTH - gx + 6,
+        bottom - top + 10,
+        fill="none",
+        stroke=LINE,
+        sw=0.6,
+        rx=4,
+        dash="2 1.5",
+    )
+    bw = (WIDTH - gx - 12) / 2
+    for k, (name, data, role, lags, biases) in enumerate(FINETUNES):
+        r, c = divmod(k, 2)
+        x = gx + c * (bw + 6)
+        y = top + r * (bh + gap)
+        main = role == MAIN
         g.rect(
-            rx,
+            x,
             y,
-            WIDTH - rx,
-            rh,
+            bw,
+            bh,
             fill="white",
-            stroke=ACCENT if role == MAIN else LINE,
-            sw=0.9 if role == MAIN else 0.6,
+            stroke=ACCENT if main else LINE,
+            sw=1.0 if main else 0.6,
             rx=3,
         )
-        gh = 3.2 + (3 * 3.8 + 1 if lags else 0)
-        _layout(g, rx + 10, y + (rh - gh) / 2, lags, biases)
-        g.text(rx + 52, y + 9.5, head, size=BODY, weight="bold")
-        g.text(rx + 52, y + 18, words, size=SMALL, fill=MUTED)
-        g.text(WIDTH - 34, y + 13.8, name, size=BODY, anchor="end")
-        badge(g, WIDTH - 29, y + (rh - 10) / 2, role)
+        h = block_height(lags)
+        mini(g, x + 6, y + (bh - h) / 2, lags, biases)
+        tx = x + 48
+        lines = len(data)
+        ty = y + bh / 2 - 4.2 * lines + 2.8
+        g.text(tx, ty, name, size=BODY, weight="bold")
+        g.text(tx, ty + 9, data, size=SMALL, fill=MUTED, lead=1.2)
+        role_dot(g, x + bw - 7, y + 7, role)
     return bottom
 
 
-# Applications, the columns of panel B: a name and a note.
+# The studies, the columns of panel B: a name and a tag.
 APPS = (
-    ("Held-out simulations", "test set"),
-    ("German nowcast hub", "7-day sums, max delay 40 d"),
-    ("Ebola forecasting hub", "weekly, max delay 42 d"),
+    ("Held-out simulations", ""),
+    ("German nowcast hub", "max delay 40 d"),
+    ("Ebola forecasting hub", "max delay 42 d"),
 )
 
-# Models and inputs, the rows of panel B: the model, its input, and per
-# application a role and a note, or None where the model does not apply.
+# The rows of panel B: a name, a glyph (lag series, biases) or None, and
+# per study a role, a note and whether it was submitted to the Ebola hub,
+# or None where the row does not apply.
 USES = (
     (
+        "Zero-shot, complete counts",
+        (False, ()),
+        [(MAIN, "", False)] * 3,
+    ),
+    (
+        "Zero-shot, reporting triangle",
+        (True, ()),
+        [(MAIN, "", False)] * 3,
+    ),
+    (
         "Fine-tuned",
-        "reporting triangle",
-        [(MAIN, ""), (MAIN, ""), (MAIN, "submitted")],
-    ),
-    (
-        "Zero-shot",
-        "reporting triangle",
-        [(MAIN, ""), (MAIN, ""), (MAIN, "")],
-    ),
-    (
-        "Zero-shot",
-        "complete counts: latest counts, no lags",
-        [(MAIN, ""), (MAIN, ""), (MAIN, "")],
+        (True, ALL_BIASES),
+        [(MAIN, "", False), (MAIN, "", False), (MAIN, "", True)],
     ),
     (
         "Random walk nowcast",
-        "baselinenowcast, extended to forecast",
-        [(MAIN, ""), (MAIN, ""), (MAIN, "submitted")],
+        None,
+        [(MAIN, "", False), (MAIN, "", False), (MAIN, "", True)],
     ),
     (
-        "Zero-shot and fine-tuned",
-        "random walk point nowcast as complete counts",
-        [(SI, ""), (SI, ""), (SI, "")],
+        "Nowcast → Chronos-2",
+        None,
+        [(SI, "", False)] * 3,
     ),
     (
-        "No biases",
-        "fine-tuned without attention biases",
-        [(SI, "validation set"), (SI, "development half"), None],
+        "Fine-tuning ablations",
+        None,
+        [(SI, "validation", False), (SI, "to 9 Feb 2022", False), None],
     ),
     (
-        "Same place only",
-        "fine-tuned with the same-place bias only",
-        [(SI, "validation set"), (SI, "development half"), None],
-    ),
-    (
-        "Parent and child only",
-        "fine-tuned with the parent and child biases only",
-        [(SI, "validation set"), (SI, "development half"), None],
-    ),
-    (
-        "No lags",
-        "fine-tuned without lag series",
-        [(SI, "validation set"), (SI, "development half"), None],
-    ),
-    (
-        "Real data",
-        "fine-tuned on real data, reporting triangle",
-        [None, (SI, "held-out half"), (SI, "later rounds")],
+        "Real-data fine-tune",
+        None,
+        [
+            None,
+            (SI, "from 10 Feb 2022", False),
+            (SI, "after 8 Nov 2026", False),
+        ],
     ),
     (
         "Renewal models",
-        "epinowcast on PyRenew; variants in SI",
-        [None, None, (MAIN, "submitted")],
+        None,
+        [None, None, (MAIN, "", True)],
     ),
 )
 
 
 def panel_b(g: Svg, oy: float) -> float:
-    """Draw panel B, how the models are used."""
+    """Draw panel B, how the models are used in each study."""
     g.label(0, oy + 9, "B", "How the models are used")
-    cx0 = 180.0
+    cx0 = 150.0
     cw = (WIDTH - cx0) / len(APPS)
-    top = oy + 20
-    for k, (name, note) in enumerate(APPS):
-        x = cx0 + k * cw
-        g.text(x + 6, top + 8, name, size=HEAD, weight="bold")
-        g.text(x + 6, top + 17, note, size=SMALL, fill=MUTED)
-    g.text(0, top + 17, "Model and input", size=SMALL, fill=MUTED)
-    rh = 20.0
+    top = oy + 18
+    for k, (name, tag) in enumerate(APPS):
+        x = cx0 + k * cw + 8
+        g.text(x, top + 8, name, size=HEAD, weight="bold")
+        if tag:
+            g.text(x, top + 17, tag, size=SMALL, fill=MUTED)
+    rh = 15.0
     y = top + 22
     g.line(0, y, WIDTH, y, stroke=FG, sw=0.6)
-    for r, (model, words, cells) in enumerate(USES):
+    for r, (name, glyph, cells) in enumerate(USES):
         if r % 2 == 0:
             g.rect(0, y, WIDTH, rh, fill=PANEL, rx=0)
-        g.text(4, y + 8.5, model, size=BODY, weight="bold")
-        g.text(4, y + 16.5, words, size=SMALL, fill=MUTED)
+        if glyph is not None:
+            lags, biases = glyph
+            h = block_height(lags, rh=2.4)
+            mini(g, 4, y + (rh - h) / 2, lags, biases, cw=3.4, rh=2.4)
+        g.text(40, y + rh / 2 + 2.6, name, size=BODY)
         for k, use in enumerate(cells):
             if use is None:
                 continue
-            role, note = use
-            x = cx0 + k * cw + 6
-            badge(g, x, y + (rh - 10) / 2, role)
+            role, note, submitted = use
+            x = cx0 + k * cw + 12
+            role_dot(g, x, y + rh / 2, role)
+            if submitted:
+                star(g, x + 10, y + rh / 2)
             if note:
-                g.text(x + 28, y + rh / 2 + 2.5, note, size=SMALL, fill=MUTED)
+                g.text(x + 7, y + rh / 2 + 2.4, note, size=SMALL, fill=MUTED)
         y += rh
         if r == 3:
             # The four models in every main results figure, above the line.
             g.line(0, y, WIDTH, y, stroke=MUTED, sw=0.5, dash="2 1.5")
     g.line(0, y, WIDTH, y, stroke=FG, sw=0.6)
-    for k in range(1, len(APPS)):
+    for k in range(len(APPS)):
         x = cx0 + k * cw
         g.line(x, top, x, y, stroke=LINE, sw=0.5)
-    g.line(cx0, top, cx0, y, stroke=LINE, sw=0.5)
-    # Legend and notes.
+    # One legend line.
     y += 12
-    x = 0.0
-    for role, name in [(MAIN, "main text"), (SI, "Supporting Information")]:
-        x += badge(g, x, y - 7.5, role) + 4
-        g.text(x, y, name, size=SMALL)
-        x += 3.6 * len(name) + 14
-    g.rect(
-        x,
-        y - 7.5,
-        24,
-        10,
-        fill="none",
-        stroke=LINE,
-        sw=0.5,
-        dash="1.5 1.5",
+    x = 4.0
+    items = (
+        ("main", "main text"),
+        ("si", "Supporting Information"),
+        ("star", "submitted to the Ebola hub"),
+        ("same", "same-place bias"),
+        ("parent", "parent and child biases"),
     )
-    g.text(x + 28, y, "empty: does not apply", size=SMALL)
-    notes = [
-        "One forward pass gives the daily counts and, from each place's"
-        " aggregate row, the 7-day sums or weekly targets.",
-        "Ebola: two passes per nowcast date, the active block and one block"
-        " per province, to fit in GPU memory.",
-        "Ebola only: draws paired across places by a copula for the hub's"
-        " trajectories, with the alternatives in the SI.",
-        "Checkpoints of the models fine-tuned on simulations are scored on"
-        " the validation simulations and the German development half (SI).",
-    ]
-    y += 12
-    for line in notes:
-        g.rect(1, y - 4.5, 2.5, 2.5, fill=COV, rx=1.2)
-        g.text(8, y, line, size=SMALL, fill=FG)
-        y += 9.5
-    return y - 6
+    for kind, words in items:
+        if kind in (MAIN, SI):
+            role_dot(g, x, y - 2.5, kind)
+        elif kind == "star":
+            star(g, x, y - 2.5)
+        else:
+            colour = SLOTS[0] if kind == "same" else PARENT_SLOT
+            g.rect(x - 1, y - 7, 2.0, 9, fill=colour, rx=1.0)
+        g.text(x + 6, y, words, size=SMALL)
+        x += 6 + 3.55 * len(words) + 14
+    return y + 2
 
 
 def build() -> str:

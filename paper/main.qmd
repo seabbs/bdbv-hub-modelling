@@ -253,12 +253,15 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 :::
 
 ![The study design.
-(A) What we fine-tune Chronos-2 on: every fine-tune starts from base Chronos-2 and trains LoRA adapters.
-Only the model fine-tuned on simulated reporting triangles with attention biases is in the main text, and base Chronos-2 is also used zero-shot.
-(B) How the models are used: rows are models and their inputs, and columns are the held-out simulations and the two case studies.
-Each cell is marked main text (filled) or Supporting Information (outlined), and left empty where the model does not apply.
-The dashed line separates the four models in every main results figure from the rest.
-The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward pass gives the daily counts and, from each place's aggregate row, the hub targets.](figures/fig2-design.svg){#fig-design}
+(A) What we fine-tune Chronos-2 on: each model trains LoRA adapters from pretrained Chronos-2, and its glyph shows its input block and attention biases as in Figure 1.
+The main model is fine-tuned on simulated data with all attention biases.
+The real-data model is fine-tuned on the German data to 9 February 2022 and the Ebola hub releases to 8 November 2026.
+(B) How the models are used in each study, with the maximum delay set for each hub.
+Zero-shot Chronos-2 gets either complete counts, each place's latest counts with no lag series, or the reporting triangle.
+Nowcast → Chronos-2 gives the random walk nowcast's point nowcast to Chronos-2 as complete counts, zero-shot and fine-tuned.
+The fine-tuning ablations, the other attention bias setups and the model without lag series, are scored on the validation simulations and the German data to 9 February 2022.
+The real-data model is scored on the German data from 10 February 2022 and the Ebola rounds after its last training release.
+Filled dots mark the main text, outlined dots the Supporting Information, and stars the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig-design}
 
 ### Evaluation on held-out synthetic data
 
