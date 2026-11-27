@@ -642,4 +642,78 @@ def draw_values(
     # Noise on the delay's parameters by stratum (`delay_strata_noise`).
     v["delay_strata_sd"] = ds("delay_strata_sd")
     v["delay_strata_jitter_sd"] = ds("delay_strata_jitter_sd")
+    # The delay change by stratum (`delay_change_strata`, `_switch`,
+    # `_combine`): a second kind, each stratum's own change, and the
+    # switch between shared and own.
+    v.update(_stratum_changes(grid, design, n_s, rng))
     return v
+
+
+def _stratum_changes(
+    grid: Grid,
+    design: Mapping[str, Any],
+    n_s: int,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
+    """Draw the delay change's second kind and each stratum's own change.
+
+    A combined change (`delay_change_combine`) adds a second kind, drawn
+    by the `delay_change` weights from the kinds that change and are not
+    the first. Related strata's own changes are of the shared kinds;
+    independent strata (`delay_change_strata`) draw their own kinds as
+    the shared change does. Each stratum's sizes and timings are its own
+    draws from the shared change's distributions.
+    """
+
+    def ds(name: str, n: int | None = None) -> Any:
+        return draw_setting(grid, name, rng, n)
+
+    levels = grid["factors"]["delay_change"]
+
+    def kind(exclude: Sequence[str]) -> str:
+        names = [k for k in levels if k not in exclude]
+        w = np.asarray([levels[k] for k in names], dtype=float)
+        return str(names[rng.choice(len(names), p=w / w.sum())])
+
+    first = str(design["delay_change"])
+    combined = design.get("delay_change_combine") == "combined"
+    second = (
+        kind(("static", first)) if combined and first != "static" else "none"
+    )
+    own = []
+    for _ in range(n_s):
+        if design.get("delay_change_strata") == "independent":
+            a = kind(())
+            b = kind(("static", a)) if combined and a != "static" else "none"
+        else:
+            a, b = first, second
+        own.append(a if b == "none" else f"{a}+{b}")
+
+    def signed(name: str) -> list[float]:
+        sign = np.where(rng.random(n_s) < 0.5, 1.0, -1.0)
+        return [float(e) for e in sign * ds(name, n_s)]
+
+    def each(name: str) -> list[float]:
+        return [float(e) for e in ds(name, n_s)]
+
+    floor = float(grid["floors"]["period_days"])
+    return {
+        "delay_change_second": second,
+        "own_change": own,
+        "own_drift": signed("drift"),
+        "own_step": signed("step"),
+        "own_step_at": each("step_at"),
+        "own_periodic": each("periodic"),
+        "own_periodic_weeks": each("periodic_weeks"),
+        "own_smooth_amp": each("smooth_amp"),
+        "own_smooth_period": [max(floor, e) for e in each("smooth_period")],
+        "own_smooth_phase": each("phase"),
+        "own_slow_at": each("slow_at"),
+        "own_slow_weeks": [
+            int(e) for e in draw_count(grid, "slow_weeks", rng, n_s)
+        ],
+        "own_slow_mult": each("slow_mult"),
+        "delay_change_rho": ds("delay_change_rho"),
+        "delay_switch_at": ds("delay_switch_at"),
+        "delay_switch_days": ds("delay_switch_days"),
+    }

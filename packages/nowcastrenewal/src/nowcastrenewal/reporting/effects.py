@@ -23,7 +23,8 @@ intercept, the covariates and the random effects (centred).
 The forms, and the simulator's values for each term, are epinowcast's at
 the pinned commit; two differences are listed in `ReferenceEffects`.
 The delay's structure across strata and time beyond that regression
-(noise layers by week, stratum and both) is in `structure`.
+(a change by stratum, and noise layers by week, stratum and both) is in
+`structure`.
 PyRenew has no reporting-delay regression,
 so this is our own `RandomVariable`.
 """
@@ -50,6 +51,9 @@ __all__ = [
     "ReportEffects",
     "change_betas",
     "change_covariates",
+    "change_kinds",
+    "change_path",
+    "change_term",
     "report_days",
 ]
 
@@ -133,6 +137,51 @@ def _window(
     return start, start + 7 * int(weeks) - 1
 
 
+def change_kinds(
+    design: Mapping[str, Any], v: Mapping[str, Any]
+) -> tuple[str, ...]:
+    """Return the kinds of a simulation's shared delay change.
+
+    `design["delay_change"]`, and with `delay_change_combine` set to
+    `combined` the second kind `v["delay_change_second"]` as well.
+    """
+    kinds = [str(design["delay_change"])]
+    second = str(v.get("delay_change_second", "none"))
+    if design.get("delay_change_combine") == "combined" and second != "none":
+        kinds.append(second)
+    return tuple(kinds)
+
+
+def change_term(
+    term: str, frame: ReferenceFrame, v: Mapping[str, Any]
+) -> np.ndarray:
+    """Return one change covariate by reference day, `(T,)`.
+
+    Over the frame's days; the trend and step scale by its last week.
+    `walk_daily` reads the weekly walk `v["delay_walk"]`.
+    """
+    week, day = frame.week, frame.day
+    n_weeks = max(int(week.max()), 1)
+    if term == "trend":
+        x = week / n_weeks - 0.5
+    elif term == "step":
+        x = (week >= v["step_at"] * n_weeks).astype(float)
+    elif term == "periodic":
+        x = np.sin(2 * np.pi * week / v["periodic_weeks"])
+    elif term == "walk_daily":
+        from ..latent.rt import daily_walk
+
+        x = daily_walk(day, v["delay_walk"])
+    elif term == "smooth":
+        x = np.sin(2 * np.pi * day / v["smooth_period"] + v["smooth_phase"])
+    elif term == "slowdown":
+        a, b = _window(v["slow_at"], v["slow_weeks"], v)
+        x = ((day >= a) & (day <= b)).astype(float)
+    else:
+        raise ValueError(f"unknown change covariate {term}")
+    return np.asarray(x, dtype=float)
+
+
 def change_covariates(
     frame: ReferenceFrame, design: Mapping[str, Any], v: Mapping[str, Any]
 ) -> dict[str, np.ndarray]:
@@ -143,7 +192,7 @@ def change_covariates(
     frame : ReferenceFrame
         The triangle's strata and dates.
     design : mapping
-        The design (`delay_change`, `shocks`).
+        The design (`delay_change`, `delay_change_combine`, `shocks`).
     v : mapping
         The values.
 
@@ -160,65 +209,44 @@ def change_covariates(
             k: np.pad(x, ((0, 0), (0, pad)), "edge") for k, x in own.items()
         }
     G, T = len(frame.place), len(frame.dates)
-    week, day = frame.week, frame.day
-    n_weeks = week.max()
-    terms = list(CHANGE_TERMS[design["delay_change"]])
-    if design["shocks"] == "backlog":
-        terms.append("backlog")
+    day = frame.day
+    terms = [t for k in change_kinds(design, v) for t in CHANGE_TERMS[k]]
     out: dict[str, np.ndarray] = {}
     for term in terms:
-        if term == "trend":
-            x = week / n_weeks - 0.5
-        elif term == "step":
-            x = (week >= v["step_at"] * n_weeks).astype(float)
-        elif term == "periodic":
-            x = np.sin(2 * np.pi * week / v["periodic_weeks"])
-        elif term == "walk_daily":
-            from ..latent.rt import daily_walk
-
-            x = daily_walk(day, v["delay_walk"])
-        elif term == "smooth":
-            x = np.sin(2 * np.pi * day / v["smooth_period"] + v["smooth_phase"])
-        elif term == "slowdown":
-            a, b = _window(v["slow_at"], v["slow_weeks"], v)
-            x = ((day >= a) & (day <= b)).astype(float)
-        else:
-            # A backlog's covariate is the log of its multiplier, in the
-            # shocked place over the shock's reference dates.
-            x2 = np.zeros((G, T))
-            places = np.atleast_1d(v["shock_places"])
-            for k, p in enumerate(places):
-                a, b = _window(
-                    np.atleast_1d(v["shock_at"])[k],
-                    np.atleast_1d(v["shock_weeks"])[k],
-                    v,
-                )
-                on = (frame.place == int(p) - 1)[:, None] & (
-                    (day >= a) & (day <= b)
-                )[None, :]
-                x2 += on * np.log(np.atleast_1d(v["shock_mult"])[k])
-            out[term] = x2
-            continue
-        out[term] = np.broadcast_to(np.asarray(x, dtype=float), (G, T)).copy()
+        out[term] = np.broadcast_to(change_term(term, frame, v), (G, T)).copy()
+    if design["shocks"] == "backlog":
+        # A backlog's covariate is the log of its multiplier, in the
+        # shocked place over the shock's reference dates.
+        x2 = np.zeros((G, T))
+        places = np.atleast_1d(v["shock_places"])
+        for k, p in enumerate(places):
+            a, b = _window(
+                np.atleast_1d(v["shock_at"])[k],
+                np.atleast_1d(v["shock_weeks"])[k],
+                v,
+            )
+            on = (frame.place == int(p) - 1)[:, None] & (
+                (day >= a) & (day <= b)
+            )[None, :]
+            x2 += on * np.log(np.atleast_1d(v["shock_mult"])[k])
+        out["backlog"] = x2
     return out
 
 
 def change_betas(
-    terms: Any, design: Mapping[str, Any], v: Mapping[str, Any], sign: float
+    terms: Any, v: Mapping[str, Any], sign: float
 ) -> dict[str, float]:
     """Return each change covariate's coefficient.
 
     A backlog, a slowdown, the walk and the smooth cycle multiply the mean
     delay: their coefficients are on the location (`sign` 1) or, with the
     opposite sign, on the logit hazard (`sign` -1). Trend, step and
-    periodic take the drawn size.
+    periodic take their drawn sizes (`drift`, `step`, `periodic`).
 
     Parameters
     ----------
     terms : iterable of str
         The covariates.
-    design : mapping
-        The design (`delay_change`).
     v : mapping
         The values.
     sign : float
@@ -229,14 +257,11 @@ def change_betas(
     dict
         Coefficient by covariate.
     """
-    size = {"drift": "drift", "step": "step", "periodic": "periodic"}.get(
-        design["delay_change"]
-    )
-    change = float(v[size]) if size else 0.0
+    size = {"trend": "drift", "step": "step", "periodic": "periodic"}
     out = {}
     for term in terms:
-        if term in ("trend", "step", "periodic"):
-            out[term] = change
+        if term in size:
+            out[term] = float(v[size[term]])
         elif term in ("backlog", "walk_daily"):
             out[term] = sign
         elif term == "slowdown":
@@ -244,6 +269,48 @@ def change_betas(
         elif term == "smooth":
             out[term] = float(v["smooth_amp"]) * sign
     return out
+
+
+def change_path(
+    frame: ReferenceFrame,
+    kinds: Any,
+    v: Mapping[str, Any],
+    sign: float,
+    walk: bool = True,
+) -> np.ndarray:
+    """Return a delay change's shift by reference day, `(T,)`.
+
+    The sum of the kinds' covariates times their coefficients
+    (`change_term`, `change_betas`), uncentred, over the frame's observed
+    days and the last day's value on padded ones.
+
+    Parameters
+    ----------
+    frame : ReferenceFrame
+        The triangle's dates.
+    kinds : iterable of str
+        Kinds of change (`CHANGE_TERMS`).
+    v : mapping
+        The change's values (`drift`, `step`, `step_at`, ...).
+    sign : float
+        1 for the location, -1 for the logit hazard.
+    walk : bool
+        Include a walk's covariate (`v["delay_walk"]`).
+
+    Returns
+    -------
+    numpy.ndarray
+        `(T,)`.
+    """
+    own = frame.cropped()
+    terms = [t for k in kinds for t in CHANGE_TERMS[k]]
+    if not walk:
+        terms = [t for t in terms if t != "walk_daily"]
+    betas = change_betas(terms, v, sign)
+    x = np.zeros(len(own.dates))
+    for term in terms:
+        x = x + betas[term] * change_term(term, own, v)
+    return np.pad(x, (0, len(frame.dates) - len(own.dates)), "edge")
 
 
 def _effects(
@@ -327,7 +394,34 @@ class ReferenceEffects(RandomVariable):
         self.hazard = design["delay_form"] != "parametric"
         self.covariates = change_covariates(frame, design, values)
         self.effects = _effects(frame, design, values)
-        from .structure import NoiseLayers, noise_layers
+        from .structure import (
+            NoiseLayers,
+            StructuredChange,
+            noise_layers,
+            own_change,
+        )
+
+        # The delay change by stratum (`structure.StructuredChange`):
+        # strata share it, or mix it with their own, or follow their own.
+        relation = str(design.get("delay_change_strata", "shared"))
+        self.change = None
+        if relation != "shared" and len(frame.place) > 1:
+            kinds = change_kinds(design, values)
+            self.change = StructuredChange(
+                f"{name}::change",
+                frame,
+                shared=lambda sign: change_path(frame, kinds, values, sign),
+                own=[
+                    own_change(values, "own_", g)
+                    for g in range(len(frame.place))
+                ],
+                relation=relation,
+                rho=float(values["delay_change_rho"]),
+                switch=str(design.get("delay_change_switch", "none")),
+                switch_at=float(values["delay_switch_at"]),
+                switch_days=float(values["delay_switch_days"]),
+                walk_sd=float(values["walk_sd"]),
+            )
 
         # Noise on every delay parameter (`structure.NoiseLayers`): by
         # week (`delay_jitter`), by stratum and by stratum and week
@@ -349,12 +443,20 @@ class ReferenceEffects(RandomVariable):
 
     def _fixed(self, sign: float, centre: bool) -> Array:
         """Each stratum and day's change covariates times coefficients."""
-        betas = change_betas(self.covariates, self.design, self.values, sign)
+        betas = change_betas(self.covariates, self.values, sign)
         G, T = len(self.frame.place), len(self.frame.dates)
+        obs = self.frame.observed
         total = jnp.zeros((G, T))
         for term, x in self.covariates.items():
-            xc = x - x[:, : self.frame.observed].mean() if centre else x
+            if self.change is not None and term != "backlog":
+                continue
+            xc = x - x[:, :obs].mean() if centre else x
             total = total + betas[term] * jnp.asarray(xc)
+        if self.change is not None:
+            change = self.change(sign=sign)
+            if centre:
+                change = change - change[:, :obs].mean()
+            total = total + change
         return total
 
     def location(self) -> Array:

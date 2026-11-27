@@ -10,6 +10,11 @@ scaled by their standard deviations (non-centred):
   by every stratum), by stratum (static) and by stratum and week, each a
   standard normal per level times its sd. One structure for every delay
   term, so each term's noise is any mix of the three layers.
+- `StructuredChange`: a change over time by stratum. Strata share one
+  change (`shared`), mix it with a change of their own (`related`) or
+  each follow their own (`independent`), and the mix can switch on or
+  off part way through (`diverge`, `converge`). A change is one kind or
+  two combined (`effects.change_path`).
 
 PyRenew has no reporting-delay structure of this kind and epinowcast's
 regression has no counterpart of these terms, so their forms are our
@@ -28,9 +33,20 @@ import numpyro.distributions as dist
 from jax import Array
 from pyrenew.metaclass import RandomVariable
 
-from .effects import ReferenceFrame
+from .effects import CHANGE_TERMS, ReferenceFrame, change_path
 
-__all__ = ["NOISE_LAYERS", "NoiseLayers", "noise_layers"]
+__all__ = [
+    "NOISE_LAYERS",
+    "SWITCH_WIDTH",
+    "NoiseLayers",
+    "StructuredChange",
+    "noise_layers",
+    "own_change",
+    "switch_weight",
+]
+
+SWITCH_WIDTH = 2 * np.log(9)
+"""A switch's logistic runs from 10% to 90% over its days."""
 
 NOISE_LAYERS: dict[str, tuple[str, ...]] = {
     "none": (),
@@ -157,3 +173,196 @@ class NoiseLayers(RandomVariable):
         if self.centre:
             total = total - total[:, : self.frame.observed].mean()
         return total
+
+
+def own_change(
+    v: Mapping[str, Any], prefix: str, g: int
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Return stratum `g`'s own change: its kinds and values.
+
+    Parameters
+    ----------
+    v : mapping
+        The values: `{prefix}change` (each stratum's kinds, a combined
+        change as `"drift+step"`) and `{prefix}{setting}` by stratum.
+    prefix : str
+        The values' prefix, as `"own_"`.
+    g : int
+        The stratum, 0-based.
+
+    Returns
+    -------
+    tuple
+        The kinds and the change's values (`effects.change_path`).
+    """
+    kinds = tuple(str(np.atleast_1d(v[f"{prefix}change"])[g]).split("+"))
+    out = {"weeks": v["weeks"]}
+    for k in OWN_SETTINGS:
+        out[k] = float(np.atleast_1d(v[f"{prefix}{k}"])[g])
+    return kinds, out
+
+
+OWN_SETTINGS = (
+    "drift",
+    "step",
+    "step_at",
+    "periodic",
+    "periodic_weeks",
+    "smooth_amp",
+    "smooth_period",
+    "smooth_phase",
+    "slow_at",
+    "slow_weeks",
+    "slow_mult",
+)
+"""The settings of a stratum's own change, each a value by stratum."""
+
+
+def switch_weight(
+    frame: ReferenceFrame, switch: str, at: float, days: float
+) -> np.ndarray:
+    r"""Return the weight of the strata's own change by reference day.
+
+    1 throughout with no switch (`"none"`); with `"diverge"` a logistic
+    from 0 to 1 centred `at` of the way through the observed days and
+    rising from 10% to 90% over `days`; `"converge"` is its reverse.
+
+    Returns
+    -------
+    numpy.ndarray
+        `(T,)`, on padded days the last observed day's.
+    """
+    T = len(frame.dates)
+    if switch == "none":
+        return np.ones(T)
+    day = np.minimum(np.arange(T), frame.observed - 1)
+    centre = at * (frame.observed - 1)
+    z = -SWITCH_WIDTH * (day - centre) / max(days, 1.0)
+    r = np.asarray(1 / (1 + np.exp(z)), dtype=float)
+    if switch == "diverge":
+        return r
+    if switch == "converge":
+        return np.asarray(1 - r, dtype=float)
+    raise ValueError(f"unknown switch {switch}")
+
+
+class StructuredChange(RandomVariable):
+    r"""A change over time by stratum: shared, related or independent.
+
+    With the shared change $S_t$ and stratum $g$'s own change $O_{g,t}$:
+
+    $$\Delta_{g,t} = (1 - u_t) S_t + u_t O_{g,t},$$
+
+    with $u_t$ 0 for `shared` strata, $(1 - \rho)$ for `related` ones and
+    1 for `independent` ones, times the switch's weight
+    (`switch_weight`). A stratum's own walk is its own: weekly standard
+    normal steps, `"{name}::walk"` by stratum and week, times `walk_sd`,
+    read between weeks as the shared walk is.
+
+    Parameters
+    ----------
+    name : str
+        Name of the component.
+    frame : ReferenceFrame
+        The triangle's strata and dates.
+    shared : callable
+        `shared(sign)` returns the shared change $S_t$, `(T,)`.
+    own : sequence
+        Each stratum's own kinds and values (`own_change`).
+    relation : str
+        `shared`, `related` or `independent`.
+    rho : float
+        Related strata's share of the shared change.
+    switch : str
+        `none`, `diverge` or `converge`.
+    switch_at, switch_days : float
+        Where the switch is centred (share of the observed days) and the
+        days it takes.
+    walk_sd : float
+        Own walks' weekly sd.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        frame: ReferenceFrame,
+        shared: Any,
+        own: Any = (),
+        relation: str = "shared",
+        rho: float = 1.0,
+        switch: str = "none",
+        switch_at: float = 0.5,
+        switch_days: float = 14.0,
+        walk_sd: float = 0.0,
+    ) -> None:
+        super().__init__(name=name)
+        self.frame = frame
+        self.shared = shared
+        self.own = list(own)
+        self.relation = relation
+        weight = {"shared": 0.0, "related": 1 - rho, "independent": 1.0}
+        many = len(frame.place) > 1
+        self.u = (
+            weight[relation]
+            * switch_weight(frame, switch, switch_at, switch_days)
+            if many
+            else np.zeros(len(frame.dates))
+        )
+        self.walk_sd = float(walk_sd)
+
+    def _walks(self, walking: np.ndarray) -> Array:
+        """Each stratum's own walk by day, `(G, T)`, 0 where none."""
+        G, T = len(self.frame.place), len(self.frame.dates)
+        obs = self.frame.cropped()
+        W = int(obs.week.max()) + 2
+        z = numpyro.sample(
+            f"{self.name}::walk", dist.Normal(0.0, 1.0).expand([G, W])
+        )
+        steps = jnp.concatenate([jnp.zeros((G, 1)), z[:, :-1]], axis=1)
+        weekly = self.walk_sd * jnp.cumsum(steps, axis=1)
+        day = np.minimum(np.arange(T), self.frame.observed - 1)
+        x = day / 7
+        w = np.floor(x).astype(int)
+        f = x - w
+        daily = (
+            weekly[:, np.minimum(w, W - 1)] * (1 - f)
+            + weekly[:, np.minimum(w + 1, W - 1)] * f
+        )
+        return jnp.where(jnp.asarray(walking)[:, None], daily, 0.0)
+
+    def sample(self, sign: float = 1.0, **kwargs: object) -> Array:
+        """Return the change by stratum and reference day, uncentred.
+
+        Parameters
+        ----------
+        sign : float
+            1 for the location, -1 for the logit hazard.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            `(G, T)`.
+        """
+        G, T = len(self.frame.place), len(self.frame.dates)
+        S = jnp.broadcast_to(jnp.asarray(self.shared(sign)), (G, T))
+        if not np.any(self.u):
+            return S
+        own = np.stack(
+            [
+                change_path(self.frame, kinds, v, sign, walk=False)
+                for kinds, v in self.own
+            ]
+        )
+        mine = jnp.asarray(own)
+        walking = np.array(
+            [
+                "walk_daily" in [t for k in kinds for t in CHANGE_TERMS[k]]
+                for kinds, _ in self.own
+            ]
+        )
+        if walking.any():
+            mine = mine + sign * self._walks(walking)
+        u = jnp.asarray(self.u)[None, :]
+        return (1 - u) * S + u * mine

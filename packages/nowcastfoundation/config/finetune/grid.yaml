@@ -113,6 +113,9 @@ factor_layers:
   report_cap: reporting
   report_stop: reporting
   delay_strata_noise: delays
+  delay_change_strata: strata
+  delay_change_switch: delays
+  delay_change_combine: delays
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -283,6 +286,26 @@ factors:
     strata: 1
     strata_time: 1
     both: 1
+  # How strata's delay changes relate: one change for all (`shared`), the
+  # shared change mixed with each stratum's own of the same kind
+  # (`related`, a share `delay_change_rho` shared), or each stratum's own
+  # change of a kind it draws (`independent`), so one place's delays can
+  # lengthen while the others stay the same.
+  delay_change_strata:
+    shared: 4
+    related: 2
+    independent: 1
+  # Related or independent strata follow the shared change until a
+  # switch and then their own (`diverge`), or the reverse (`converge`).
+  delay_change_switch:
+    none: 3
+    diverge: 1
+    converge: 1
+  # A second kind of delay change added to the first (as drift and step,
+  # or walk and periodic) in a quarter of sims with a change.
+  delay_change_combine:
+    single: 3
+    combined: 1
 distributions:
   quiet:
     dist: beta
@@ -789,6 +812,28 @@ distributions:
     sdlog: 0.5
     layer: delays
     why: each stratum's own week-to-week noise on the delay's parameters of about 3% to 16% (5-95%) on their log scale
+  delay_change_rho:
+    dist: beta
+    a: 2.0
+    b: 2.0
+    lower: 0.3
+    upper: 0.9
+    layer: strata
+    why: related strata share most but not all of their delay change, as correlated places share their R
+  delay_switch_at:
+    dist: beta
+    a: 2.0
+    b: 2.0
+    lower: 0.0
+    upper: 1.0
+    layer: delays
+    why: strata's delay changes diverge or converge away from the ends
+  delay_switch_days:
+    dist: lognormal
+    median: 14.0
+    sdlog: 0.6
+    layer: delays
+    why: strata's delay changes diverge or converge over a few days to six weeks
   delay_dow_sd:
     dist: lognormal
     median: 0.1
