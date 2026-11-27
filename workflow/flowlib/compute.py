@@ -106,6 +106,7 @@ GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 RULE_GROUPS = {
     "simulate_batch": "simulate",
     "train_segment": "train",
+    "train_real": "train",
     "evaluate_base": "evaluate",
     "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
@@ -114,8 +115,9 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset({"train_segment"})
-"""The rules taking the `gpu` resource: the trainer, so the GPU is the
+GPU_RULES = frozenset({"train_segment", "train_real"})
+"""The rules taking the `gpu` resource: the trainers (a simulation run's
+and a real-data run's), so the GPU is the
 run's for every segment. Evaluation, scoring and figures run beside it on
 the forecasting device (`flowlib.forecast`), and with `forecast.gpu:
 exclusive` on CUDA take `gpu` too. Placed on a worker by its group,
