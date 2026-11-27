@@ -103,7 +103,7 @@ class ReportingExpectation(RandomVariable):
         Array
             `(G, T, D)`.
         """
-        parametric, non_parametric = self.reference()
+        parametric, non_parametric = self.reference(log_lambda=log_lambda)
         report, by_reference = self.report()
         if self.as_log_probs:
             log_p = parametric + non_parametric

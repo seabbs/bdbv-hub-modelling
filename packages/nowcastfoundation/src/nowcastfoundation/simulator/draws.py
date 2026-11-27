@@ -646,6 +646,16 @@ def draw_values(
     # `_combine`): a second kind, each stratum's own change, and the
     # switch between shared and own.
     v.update(_stratum_changes(grid, design, n_s, rng))
+    # The delay by the stratum's expected counts (`delay_counts`): longer
+    # when counts are high with `delay_counts_longer`, else shorter; one
+    # sign for all strata unless each has its own slope.
+    longer = draw_share(grid, "delay_counts_longer", rng, n_s)
+    sign = np.where(longer, 1, -1)
+    if design.get("delay_counts", "none") in ("none", "shared"):
+        sign[:] = sign[0]
+    v["delay_counts_sign"] = vec(sign)
+    v["delay_counts_slope"] = ds("delay_counts_slope")
+    v["delay_counts_sd"] = ds("delay_counts_sd")
     return v
 
 

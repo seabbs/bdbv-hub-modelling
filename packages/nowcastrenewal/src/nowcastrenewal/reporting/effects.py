@@ -23,8 +23,8 @@ intercept, the covariates and the random effects (centred).
 The forms, and the simulator's values for each term, are epinowcast's at
 the pinned commit; two differences are listed in `ReferenceEffects`.
 The delay's structure across strata and time beyond that regression
-(a change by stratum, and noise layers by week, stratum and both) is in
-`structure`.
+(a change by stratum, a link to the stratum's expected counts, and noise
+layers by week, stratum and both) is in `structure`.
 PyRenew has no reporting-delay regression,
 so this is our own `RandomVariable`.
 """
@@ -395,6 +395,7 @@ class ReferenceEffects(RandomVariable):
         self.covariates = change_covariates(frame, design, values)
         self.effects = _effects(frame, design, values)
         from .structure import (
+            CountCoupling,
             NoiseLayers,
             StructuredChange,
             noise_layers,
@@ -423,6 +424,21 @@ class ReferenceEffects(RandomVariable):
                 walk_sd=float(values["walk_sd"]),
             )
 
+        # The delay's location by the stratum's log expected counts
+        # (`structure.CountCoupling`).
+        level = str(design.get("delay_counts", "none"))
+        self.coupling = None
+        if level != "none":
+            G = len(frame.place)
+            sign = np.atleast_1d(values["delay_counts_sign"])
+            self.coupling = CountCoupling(
+                f"{name}::counts",
+                frame,
+                slope=float(values["delay_counts_slope"])
+                * np.broadcast_to(sign, (G,)),
+                level=level,
+                sd=float(values["delay_counts_sd"]),
+            )
         # Noise on every delay parameter (`structure.NoiseLayers`): by
         # week (`delay_jitter`), by stratum and by stratum and week
         # (`delay_strata_noise`), with no trend.
@@ -459,20 +475,29 @@ class ReferenceEffects(RandomVariable):
             total = total + change
         return total
 
-    def location(self) -> Array:
-        r"""Return $\mu_{g,t}$, `(G, T)` (centred effects)."""
+    def location(self, log_lambda: Any = None) -> Array:
+        r"""Return $\mu_{g,t}$, `(G, T)` (centred effects).
+
+        `log_lambda`, the log expected counts by stratum and reference
+        day, is needed with a count coupling (`delay_counts`).
+        """
         delay = Delay.from_values(self.design["delay_family"], self.values)
         mu = (
             jnp.asarray(delay.mu)
             + self._fixed(1.0, centre=True)
             + self._random("mean")
         )
+        if self.coupling is not None:
+            mu = mu + self.coupling(log_lambda=log_lambda)
         if self.noise:
             mu = mu + self.noise(term="location")
         return mu
 
-    def non_parametric(self) -> Array:
-        """Return the non-parametric logit hazard, `(G, T, D)`."""
+    def non_parametric(self, log_lambda: Any = None) -> Array:
+        """Return the non-parametric logit hazard, `(G, T, D)`.
+
+        `log_lambda` as `location`.
+        """
         v, D = self.values, self.max_delay
         G, T = len(self.frame.place), len(self.frame.dates)
         z_w = numpyro.sample(
@@ -489,6 +514,8 @@ class ReferenceEffects(RandomVariable):
         by_delay = by_delay - by_delay.mean()
         intercept = jnp.log(1 / v["delay_mean"])  # logit(1 / (1 + mean))
         by_day = self._fixed(-1.0, centre=True) + self._random("hazard")
+        if self.coupling is not None:
+            by_day = by_day - self.coupling(log_lambda=log_lambda)
         out = intercept + by_day[..., None] + by_delay
         if self.noise:
             # The level and the shape (a tilt across delays).
@@ -500,11 +527,16 @@ class ReferenceEffects(RandomVariable):
             )
         return jnp.asarray(out)
 
-    def sample(self, **kwargs: object) -> tuple[Array, Array]:
+    def sample(
+        self, log_lambda: Any = None, **kwargs: object
+    ) -> tuple[Array, Array]:
         """Return the parametric and non-parametric logit hazards.
 
         Parameters
         ----------
+        log_lambda : array_like, optional
+            Log expected counts by stratum and reference day, `(G, T)`;
+            needed with a count coupling (`delay_counts`).
         **kwargs
             Ignored, for the PyRenew interface.
 
@@ -519,7 +551,7 @@ class ReferenceEffects(RandomVariable):
         if self.parametric:
             family = self.design["delay_family"]
             sigma = Delay.from_values(family, self.values).sigma
-            mu = self.location()
+            mu = self.location(log_lambda)
             numpyro.deterministic(f"{self.name}::location", mu)
             scale = jnp.broadcast_to(jnp.asarray(sigma, dtype=float), mu.shape)
             if self.noise:
@@ -531,7 +563,9 @@ class ReferenceEffects(RandomVariable):
                 if self.as_log_pmf
                 else censored_logit_hazard(delay, D)
             )
-        non_parametric = self.non_parametric() if self.hazard else zeros
+        non_parametric = (
+            self.non_parametric(log_lambda) if self.hazard else zeros
+        )
         return parametric, non_parametric
 
 

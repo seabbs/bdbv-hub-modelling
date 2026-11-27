@@ -41,6 +41,7 @@ def test_new_factors_have_a_layer_and_keep_todays_level(grid):
         "delay_change_strata": "shared",
         "delay_change_switch": "none",
         "delay_change_combine": "single",
+        "delay_counts": "none",
     }
     for factor, level in keep.items():
         assert factor in grid["factor_layers"]
@@ -90,3 +91,23 @@ def test_strata_draw_their_own_delay_changes(grid, sims):
         for level in grid["factors"][factor]:
             want = _weight(grid, factor, level)
             assert abs(_share(sims, factor, level) - want) < 0.05
+
+
+def test_delay_counts_slopes_take_either_sign(grid, sims):
+    longer, mixed = [], 0
+    for d, v in sims:
+        sign = v["delay_counts_sign"]
+        assert len(sign) == d["n_places"] * d["n_ages"]
+        assert set(sign) <= {1, -1}
+        if d["delay_counts"] in ("none", "shared"):
+            assert len(set(sign)) == 1
+        mixed += len(set(sign)) > 1
+        longer += sign
+        assert v["delay_counts_slope"] > 0
+        assert v["delay_counts_sd"] > 0
+    share = grid["shares"]["delay_counts_longer"]
+    assert abs(np.mean(np.asarray(longer) > 0) - share) < 0.05
+    assert mixed > 0
+    for level in grid["factors"]["delay_counts"]:
+        want = _weight(grid, "delay_counts", level)
+        assert abs(_share(sims, "delay_counts", level) - want) < 0.05

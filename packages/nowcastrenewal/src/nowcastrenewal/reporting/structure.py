@@ -15,6 +15,10 @@ scaled by their standard deviations (non-centred):
   each follow their own (`independent`), and the mix can switch on or
   off part way through (`diverge`, `converge`). A change is one kind or
   two combined (`effects.change_path`).
+- `CountCoupling`: a term linear in a stratum's log expected counts by
+  reference date, centred over its observed days, with a slope by
+  stratum that may move from week to week (`NoiseLayers`), of either
+  sign.
 
 PyRenew has no reporting-delay structure of this kind and epinowcast's
 regression has no counterpart of these terms, so their forms are our
@@ -36,8 +40,10 @@ from pyrenew.metaclass import RandomVariable
 from .effects import CHANGE_TERMS, ReferenceFrame, change_path
 
 __all__ = [
+    "COUPLING_LAYERS",
     "NOISE_LAYERS",
     "SWITCH_WIDTH",
+    "CountCoupling",
     "NoiseLayers",
     "StructuredChange",
     "noise_layers",
@@ -56,6 +62,16 @@ NOISE_LAYERS: dict[str, tuple[str, ...]] = {
 }
 """The stratum noise layers of each `delay_strata_noise` level; the time
 layer is `delay_jitter`'s."""
+
+COUPLING_LAYERS: dict[str, tuple[str, ...]] = {
+    "none": (),
+    "shared": (),
+    "strata": ("strata",),
+    "strata_time": ("strata", "strata_time"),
+}
+"""The noise layers on a count coupling's slope by level: one slope
+(`shared`), a static slope by stratum (`strata`) or one that also moves
+from week to week (`strata_time`)."""
 
 
 def noise_layers(
@@ -366,3 +382,84 @@ class StructuredChange(RandomVariable):
             mine = mine + sign * self._walks(walking)
         u = jnp.asarray(self.u)[None, :]
         return (1 - u) * S + u * mine
+
+
+class CountCoupling(RandomVariable):
+    r"""A term linear in each stratum's log expected counts.
+
+    For stratum $g$ and reference day $t$ with expected counts
+    $\lambda_{g,t}$:
+
+    $$c_{g,t} = \kappa_g e^{\epsilon_{g,t}}
+    \left(x_{g,t} - \bar x_g\right), \quad x_{g,t} = \log(1 +
+    \lambda_{g,t}),$$
+
+    with $\bar x_g$ the stratum's mean over the observed days, the slope
+    $\kappa_g$ of either sign, and $\epsilon$ noise on the log slope
+    (`NoiseLayers`, uncentred, sites `"{name}::strata_slope"` and
+    `"{name}::strata_jitter_slope"`). Padded days take the last observed
+    day's value.
+
+    Parameters
+    ----------
+    name : str
+        Name of the component.
+    frame : ReferenceFrame
+        The triangle's strata and dates.
+    slope : array_like
+        Each stratum's slope $\kappa_g$, `(G,)` (or one for all).
+    level : str
+        `shared`, `strata` or `strata_time` (`COUPLING_LAYERS`).
+    sd : float
+        The sd of each layer of $\epsilon$.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        frame: ReferenceFrame,
+        slope: Any,
+        level: str = "shared",
+        sd: float = 0.0,
+    ) -> None:
+        super().__init__(name=name)
+        self.frame = frame
+        G = len(frame.place)
+        self.slope = np.broadcast_to(
+            np.atleast_1d(np.asarray(slope, dtype=float)), (G,)
+        )
+        layers = COUPLING_LAYERS[level]
+        self.noise = NoiseLayers(
+            name,
+            frame,
+            strata_sd=sd if "strata" in layers else 0.0,
+            strata_time_sd=sd if "strata_time" in layers else 0.0,
+            centre=False,
+        )
+
+    def sample(self, log_lambda: Any = None, **kwargs: object) -> Array:
+        """Return the term by stratum and reference day.
+
+        Parameters
+        ----------
+        log_lambda : array_like
+            Log expected counts by stratum and reference day, `(G, T)`.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            `(G, T)`.
+        """
+        if log_lambda is None:
+            raise ValueError(f"{self.name} needs the log expected counts")
+        obs = self.frame.observed
+        x = jnp.logaddexp(0.0, jnp.asarray(log_lambda))
+        x = x - x[:, :obs].mean(axis=1, keepdims=True)
+        T = x.shape[1]
+        x = x[:, np.minimum(np.arange(T), obs - 1)]
+        slope = jnp.asarray(self.slope)[:, None]
+        if self.noise:
+            slope = slope * jnp.exp(self.noise(term="slope"))
+        return slope * x

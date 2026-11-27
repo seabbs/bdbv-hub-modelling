@@ -50,6 +50,7 @@ shares:
   weekday_pattern_part: 0.5 # each part of a structured pattern
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
+  delay_counts_longer: 0.65 # delays longer, not shorter, when counts are high
 rates:
   shifts: 0.7          # shifts in R per simulation (half have none)
   extra_waves: 0.5     # multi-wave: waves beyond 2
@@ -116,6 +117,7 @@ factor_layers:
   delay_change_strata: strata
   delay_change_switch: delays
   delay_change_combine: delays
+  delay_counts: delays
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -306,6 +308,17 @@ factors:
   delay_change_combine:
     single: 3
     combined: 1
+  # The delay's location linear in the stratum's log expected counts by
+  # reference date (not its infections): one slope for all strata, a
+  # static slope by stratum, or one that also moves week to week. Longer
+  # delays when counts are high (reporting strain) in about two thirds,
+  # shorter (more attention in a surge) in the rest, as the German states
+  # show both.
+  delay_counts:
+    none: 3
+    shared: 1
+    strata: 1
+    strata_time: 1
 distributions:
   quiet:
     dist: beta
@@ -834,6 +847,18 @@ distributions:
     sdlog: 0.6
     layer: delays
     why: strata's delay changes diverge or converge over a few days to six weeks
+  delay_counts_slope:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.6
+    layer: delays
+    why: the log delay moves by 0.04 to 0.27 (5-95%) per unit of log expected counts, so tenfold counts change the delay by about x1.1 to x1.9
+  delay_counts_sd:
+    dist: lognormal
+    median: 0.3
+    sdlog: 0.4
+    layer: strata
+    why: strata's slopes of the delay on their counts, on the log scale, within about x0.6 to x1.7 of the shared slope
   delay_dow_sd:
     dist: lognormal
     median: 0.1
