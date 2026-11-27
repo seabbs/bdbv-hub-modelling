@@ -68,9 +68,8 @@ def test_latest_is_the_main_run_s_checkpoint_not_the_newest_release(
     assert got.tag == "chronos-slots-main4800"
 
 
-def test_no_main_run_checkpoint_fails_rather_than_take_another_run(
-    releases: Path,
-) -> None:
+@pytest.mark.usefixtures("releases")
+def test_no_main_run_checkpoint_fails_rather_than_take_another_run() -> None:
     # Only an ablation's release: no fallback to it.
     with pytest.raises(LookupError, match=fc.MAIN_TAG):
         fc.resolve_checkpoint("latest")
@@ -106,7 +105,7 @@ class _Gh:
         if action in ("create", "upload"):
             assets = self.releases.setdefault(tag, {})
             for f in command[4:]:
-                if Path(f).is_file():
+                if "\n" not in f and Path(f).is_file():
                     assets[Path(f).name] = Path(f).read_text()
             return done(command, 0, "ok", "")
         if action == "edit":
@@ -116,7 +115,7 @@ class _Gh:
 
 def _segment(tmp_path: Path, settings: dict) -> Path:
     where = tmp_path / "n4800"
-    where.mkdir()
+    where.mkdir(parents=True)
     (where / "settings.json").write_text(json.dumps(settings))
     return where
 
@@ -144,7 +143,8 @@ def test_promoting_names_the_checkpoint_in_the_main_release(
     later = _segment(tmp_path / "later", {**SETTINGS, "hash": "next"})
     fs.promote_main(later, "runa", run=gh)
     upload = [c for c in gh.calls if c[2] == "upload"]
-    assert upload and "--clobber" in upload[-1]
+    assert upload
+    assert "--clobber" in upload[-1]
     assert any(c[2] == "edit" for c in gh.calls)
     main = json.loads(gh.releases[fc.MAIN_TAG][fc.MAIN_FILE])
     assert main["spec"] == "slots-next"

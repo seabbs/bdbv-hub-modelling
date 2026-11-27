@@ -36,6 +36,7 @@ import os
 import pickle
 import shutil
 import subprocess
+import tempfile
 import time
 import zlib
 from collections.abc import Callable, Iterator, Sequence
@@ -56,6 +57,10 @@ from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     LAYOUTS,
+    MAIN_FILE,
+    MAIN_TAG,
+    SUMS_FILE,
+    checkpoint_spec,
     release_tag,
 )
 
@@ -1657,6 +1662,96 @@ def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
     if result.returncode != 0:
         raise RuntimeError(f"could not upload to {tag}: {result.stderr}")
     log(f"uploaded {[f.name for f in missing]} to {tag}")
+
+
+def promote_main(
+    where: Path, run_name: str, run: Any = subprocess.run
+) -> dict[str, Any]:
+    """Name a released checkpoint the main run's newest, in `MAIN_TAG`.
+
+    `MAIN_FILE` of the release `MAIN_TAG` records the run and the
+    checkpoint, and the release notes name it; the fine-tuned models load
+    it (`forecaster.latest_spec`). The release is made on first use, and
+    each later call replaces its record. Only the main fine-tuning run
+    (the paper's `live_run`) calls this.
+
+    Parameters
+    ----------
+    where : pathlib.Path
+        The checkpoint's folder, with its `settings.json`.
+    run_name : str
+        The main run's workflow name.
+    run : callable
+        Runs a command, as `subprocess.run`.
+
+    Returns
+    -------
+    dict
+        The record written to `MAIN_FILE`.
+
+    Raises
+    ------
+    RuntimeError
+        If the checkpoint's own release (with its `SUMS_FILE`) is missing,
+        or `gh` fails.
+    """
+    settings = json.loads((where / "settings.json").read_text())
+    spec = checkpoint_spec(settings)
+    tag = release_tag(spec)
+
+    def gh(*command: str) -> subprocess.CompletedProcess[str]:
+        done: subprocess.CompletedProcess[str] = run(
+            ["gh", "release", *command, "-R", REPO],
+            capture_output=True,
+            text=True,
+        )
+        return done
+
+    view = gh("view", tag, "--json", "assets")
+    if view.returncode != 0 or SUMS_FILE not in {
+        a["name"] for a in json.loads(view.stdout)["assets"]
+    }:
+        raise RuntimeError(f"{tag} is not released, so it is not promoted")
+    n = settings.get("n_outbreaks")
+    record = {
+        "run": run_name,
+        "spec": spec,
+        "tag": tag,
+        "hash": str(settings["hash"]),
+        "n_outbreaks": n,
+    }
+    notes = (
+        f"The main fine-tuning run's ({run_name}) newest released "
+        f"checkpoint: {tag} ({n} outbreaks). The fine-tuned models load "
+        f"the checkpoint {MAIN_FILE} names. Each checkpoint keeps its own "
+        "release; ablation runs never change this one.\n\nThis was opened "
+        "by a bot. Please ping @seabbs for any questions."
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / MAIN_FILE
+        path.write_text(json.dumps(record, indent=1) + "\n")
+        steps: list[tuple[str, ...]]
+        if gh("view", MAIN_TAG, "--json", "assets").returncode != 0:
+            steps = [
+                (
+                    "create", MAIN_TAG, "--latest=false", "--title",
+                    "Chronos-2 fine-tuned, main run", "--notes", notes,
+                    str(path),
+                )
+            ]  # fmt: skip
+        else:
+            steps = [
+                ("upload", MAIN_TAG, str(path), "--clobber"),
+                ("edit", MAIN_TAG, "--notes", notes),
+            ]
+        for step in steps:
+            result = gh(*step)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"could not {step[0]} {MAIN_TAG}: {result.stderr}"
+                )
+    log(f"{MAIN_TAG} names {tag} of {run_name}")
+    return record
 
 
 OOM_PAUSE = 60
