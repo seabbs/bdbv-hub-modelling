@@ -194,6 +194,12 @@ score:
   # config overrides it). Two take the cores one 2-thread unit took, so
   # the held-out evaluation keeps its threads; more take them from it.
   workers: 2
+  # The German units' device: cpu, cuda or mps, or null for the
+  # checkpoint scoring device (compute.scoring_forecast), a whole GPU
+  # once no run trains on it. On the CPU, so the GPU is left to training
+  # and the held-out evaluation: an 8 GB GPU runs out of memory on a
+  # unit and is slower than two CPU workers.
+  device: cpu
 
 hub_rounds:
   # The hub rounds report (rules/report.smk): our last this many submitted
