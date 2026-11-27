@@ -8,14 +8,25 @@
 "use strict";
 var PAL=window.simsPalette,LAYERS=window.simsLayers,MAXCOL=PAL.length-1;
 var NS="http://www.w3.org/2000/svg";
-var S={layer:null,src:null,data:null,shown:[],levels:{},bins:{},group:null,
+var S={ref:{},layer:null,src:null,data:null,shown:[],levels:{},bins:{},group:null,
  scale:"log",norm:false,sort:"cases",desc:true,sim:null};
 var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  peak:"Peak week's cases",peak_at:"Peak position",delay:"Mean delay (days)",
  within7:"Share within 7 days",negative:"Share of negative updates",
  within14:"Share within 14 days",within28:"Share within 28 days",
  releases:"Releases a week",gap:"Days between releases",first_report:"Days to the first report",
- growth:"Largest weekly growth (log)",noise:"Observation noise"};
+ growth:"Largest weekly growth (log)",noise:"Observation noise",
+ delay_drift:"Week-to-week variation of the mean delay (CV)",delay_trend:"Mean delay, last third less first (days)",
+ dow_delay:"Range of the mean delay over weekdays (days)",release_weekdays:"Weekdays with releases",
+ wait:"Days waiting for the next release",wait_share:"Share of the delay waiting for a release",
+ strata_spread:"Spread of the strata's mean delays (sd, days)"};
+// The data the simulations are read against (`delay_reference` in the
+// workflow, as reference.json names them): each drawn in the page's ink,
+// told apart by its dash.
+var DASHES=["6 3","2 3","8 2 2 2"];
+function refList(){return Object.keys(S.ref).map(function(k,i){return [k,S.ref[k].short||k,DASHES[i%DASHES.length]]})}
+function refsOf(get){return refList().map(function(r){var e=S.ref[r[0]];var v=e?get(e):null;
+ return v===null||v===undefined?null:{key:r[0],label:r[1],dash:r[2],v:v}}).filter(Boolean)}
 function $(id){return document.getElementById(id)}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){
  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
@@ -62,9 +73,9 @@ function lineChart(el,o){
  var g=[];
  (o.log?logTicks(y0,y1):ticks(y0,y1,4)).forEach(function(v){var y=fy(v);
   g.push('<line class=grid x1='+L+' x2='+(W-R)+' y1='+y+' y2='+y+'></line><text class=ax x='+(L-4)+' y='+(y+4)+' text-anchor=end>'+fmt(v)+'</text>')});
- var xt=o.dates?dateTicks(x0,x1,Math.max(2,Math.floor(pw/90))):ticks(x0,x1,Math.max(2,Math.floor(pw/80)));
+ var xt=o.xt||(o.dates?dateTicks(x0,x1,Math.max(2,Math.floor(pw/90))):ticks(x0,x1,Math.max(2,Math.floor(pw/80))));
  xt.forEach(function(v){var x=fx(v);g.push('<text class=ax x='+x+' y='+(H-B+14)+' text-anchor='+(x>W-R-40?'end':'middle')+'>'+
-  (o.dates?o.dates(v):fmt(v))+'</text>')});
+  xlabel(o,v)+'</text>')});
  if(o.xlab)g.push('<text class=ax x='+(L+pw/2)+' y='+(H-2)+' text-anchor=middle>'+esc(o.xlab)+'</text>');
  if(o.ylab)g.push('<text class=ax transform="rotate(-90)" x='+(-(T+ph/2))+' y=11 text-anchor=middle>'+esc(o.ylab)+'</text>');
  if(o.hline!==undefined){var hy=fy(o.hline);g.push('<line class=mark x1='+L+' x2='+(W-R)+' y1='+hy+' y2='+hy+'></line>')}
@@ -89,7 +100,8 @@ function lineChart(el,o){
   showTip(e,(o.hover||defaultHover)(s,best[3],o))});
  svg.addEventListener("mouseleave",function(){dot.setAttribute("visibility","hidden");hideTip()});
  if(o.pick)svg.addEventListener("click",function(){if(cur)o.pick(o.series[cur[2]].id)})}
-function defaultHover(s,i,o){return "<b>"+esc(s.name)+"</b><br>"+(o.dates?o.dates(s.x[i]):fmt(s.x[i]))+": "+fmt(s.y[i])}
+function xlabel(o,v){return o.xfmt?o.xfmt(v):o.dates?o.dates(v):fmt(v)}
+function defaultHover(s,i,o){return "<b>"+esc(s.name)+"</b><br>"+xlabel(o,s.x[i])+": "+fmt(s.y[i])}
 
 // The layer panels share one size (PW x PH), so the grid is even: shares
 // of each level (shown solid over all faint) and histograms (all faint,
@@ -264,6 +276,7 @@ function curvePanel(el,xs,xlab,rowsOf,groupsList,colour,opts){
  var sets=groupsList.map(function(gr){var rows=rowsOf(gr.ix);
   var st=xs.map(function(_,j){var col=rows.map(function(r){return r[j]});return [q(col,0.25),q(col,0.5),q(col,0.75)]});
   st.forEach(function(v){v.forEach(function(x){if(x!==null)ys.push(x)})});return {gr:gr,st:st}});
+ var refs=opts.refs||[];refs.forEach(function(r){r.v.forEach(function(x){if(x!==null)ys.push(x)})});
  if(!ys.length){el.innerHTML="<p class=mut>No values.</p>";return}
  var y0=opts.y0!==undefined?opts.y0:Math.min.apply(null,ys),y1=Math.max.apply(null,ys);if(y1===y0)y1=y0+1;
  var x0=0,x1=xs.length-1,sx=function(j){return L+(j-x0)/(x1-x0||1)*pw},sy=function(v){return T+ph-(v-y0)/(y1-y0)*ph};
@@ -275,9 +288,11 @@ function curvePanel(el,xs,xlab,rowsOf,groupsList,colour,opts){
   set.st.forEach(function(v,j){if(v[0]===null)return;up.push(sx(j).toFixed(1)+","+sy(v[2]).toFixed(1));dn.unshift(sx(j).toFixed(1)+","+sy(v[0]).toFixed(1));med+=(med?"L":"M")+sx(j).toFixed(1)+" "+sy(v[1]).toFixed(1)});
   g.push('<polygon points="'+up.concat(dn).join(" ")+'" fill="'+c+'" opacity="'+(faint?0.12:0.18)+'"><title>'+esc(set.gr.label)+': 50% of simulations</title></polygon>');
   g.push('<path d="'+med+'" fill=none stroke="'+c+'" stroke-width='+(faint?1.5:2)+(faint?' stroke-dasharray="4 3"':'')+'><title>'+esc(set.gr.label)+' ('+set.gr.ix.length+'): median</title></path>')});
+ refs.forEach(function(r){var d="";r.v.forEach(function(v,j){if(v===null)return;d+=(d?"L":"M")+sx(j).toFixed(1)+" "+sy(v).toFixed(1)});
+  g.push('<path d="'+d+'" fill=none stroke="var(--fg)" stroke-width=1.5 stroke-dasharray="'+r.dash+'"><title>'+esc(r.label)+'</title></path>')});
  el.innerHTML=dsvg(g.join(""))}
 // intervals: per group a row, its 5-95% line, 25-75% bar and median.
-function intervalPanel(el,col,groupsList,colour,log){
+function intervalPanel(el,col,groupsList,colour,log,refs){refs=refs||[];
  var L=92,R=10,T=6,B=18,rh=Math.min(18,(DH-T-B)/groupsList.length),pw=DW-L-R,g=[],all=[];
  var sets=groupsList.map(function(gr){var v=gr.ix.map(function(i){return col[i]}).filter(function(x){return x!==null&&(!log||x>0)});v.forEach(function(x){all.push(x)});
   return {gr:gr,q:[q(v,0.05),q(v,0.25),q(v,0.5),q(v,0.75),q(v,0.95)],n:v.length}});
@@ -294,19 +309,48 @@ function intervalPanel(el,col,groupsList,colour,log){
    '<rect x='+sx(v[1])+' y='+(y-4)+' width='+Math.max(1,sx(v[3])-sx(v[1]))+' height=8 rx=2 fill="'+c+'" opacity=.45></rect>'+
    '<circle cx='+sx(v[2])+' cy='+y+' r=3.5 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
    '<rect x=0 y='+(y-rh/2)+' width='+DW+' height='+rh+' fill=transparent></rect></g>')});
+ // The data's values as dashed lines (at the edge when off the scale),
+ // named with their values under the panel.
+ refs.forEach(function(r){if(log&&r.v<=0)return;var x=sx(r.v),top=T+groupsList.length*rh;
+  g.push('<g><title>'+esc(r.label)+': '+fmt(r.v)+'</title><line x1='+x+' x2='+x+' y1='+T+' y2='+top+' stroke="var(--fg)" stroke-width=1.5 stroke-dasharray="'+r.dash+'"></line></g>')});
  if(log)g.push('<text class=ax x='+(DW-R)+' y='+(T+8)+' text-anchor=end>log scale</text>');
- el.innerHTML=dsvg(g.join(""))}
-function derived(){var d=S.data,box=$("derivedbody");if(!d.derived){box.innerHTML='<p class=mut>This source was summarised before these summaries; it is summarised again on the next refresh.</p>';return}
- var g=groups(),by={};S.shown.forEach(function(i){var l=g.of(i);(by[l]=by[l]||[]).push(i)});
+ el.innerHTML=dsvg(g.join(""))+(refs.length?'<div class=leg>'+refs.map(function(r){return '<span><svg width=18 height=8><line x1=0 x2=18 y1=4 y2=4 stroke="var(--fg)" stroke-width=1.5 stroke-dasharray="'+r.dash+'"></line></svg>'+esc(r.label)+' '+fmt(r.v)+'</span>'}).join("")+'</div>':'')}
+// groupLists: the source's whole, then each level of the group-by factor
+// among those shown, with their colours.
+function groupLists(){var d=S.data,g=groups(),by={};S.shown.forEach(function(i){var l=g.of(i);(by[l]=by[l]||[]).push(i)});
  var list=[{key:"(all)",label:"all of the source",ix:d.ids.map(function(_,i){return i})}].concat(g.list.map(function(l){return {key:l,label:l==="all"?"shown":l,ix:by[l]||[]}}));
- var colour=function(k){return k==="(all)"?"var(--mut)":g.colour(k)};
- $("derivedleg").innerHTML=list.map(function(x){return '<span><i style="background:'+colour(x.key)+(x.key==="(all)"?';opacity:.5':'')+'"></i>'+esc(x.label)+' <span class=mut>'+x.ix.length+'</span></span>'}).join("")+'<span class=mut>Split by '+esc(S.group||"nothing")+' (the "Colour and group by" control); median and 50% band, or median, 50% and 90% of the simulations.</span>';
- var curves=[["cdf","Share reported by delay","delay (days)",d.delay_points,{y0:0}],["refdow","Reference-date weekday profile","weekday of reference date",DAYS,{hline:1}],["repdow","Report-date weekday profile","weekday of report",DAYS,{hline:1}]];
- var scalars=[["within7"],["within14"],["within28"],["releases"],["gap"],["first_report"],["growth"],["peak",true],["peak_at"],["negative"],["noise"]];
- box.innerHTML=curves.map(function(c){return '<div class="card lpanel"><h3>'+c[1]+'</h3><div data-c="'+c[0]+'"></div></div>'}).join("")+
-  scalars.filter(function(k){return d.stats[k[0]]}).map(function(k){return '<div class="card lpanel"><h3>'+esc(STATS[k[0]]||k[0])+'</h3><div data-x="'+k[0]+'"></div></div>'}).join("");
- curves.forEach(function(c){curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]})},list,colour,c[4])});
- scalars.forEach(function(k){var el=box.querySelector('[data-x="'+k[0]+'"]');if(el)intervalPanel(el,d.stats[k[0]],list,colour,!!k[1])})}
+ return {list:list,colour:function(k){return k==="(all)"?"var(--mut)":g.colour(k)}}}
+function groupLegend(gl,extra){return gl.list.map(function(x){return '<span><i style="background:'+gl.colour(x.key)+(x.key==="(all)"?';opacity:.5':'')+'"></i>'+esc(x.label)+' <span class=mut>'+x.ix.length+'</span></span>'}).join("")+(extra||"")+'<span class=mut>Split by '+esc(S.group||"nothing")+' (the "Colour and group by" control); median and 50% band, or median, 50% and 90% of the simulations.</span>'}
+function scalarPanels(box,keys,gl,refOf){var d=S.data;
+ box.innerHTML+=keys.filter(function(k){return d.stats[k[0]]}).map(function(k){return '<div class="card lpanel"><h3 title="'+esc(STATS[k[0]]||k[0])+'">'+esc(STATS[k[0]]||k[0])+'</h3><div data-x="'+k[0]+'"></div></div>'}).join("");
+ keys.forEach(function(k){var el=box.querySelector('[data-x="'+k[0]+'"]');if(el)intervalPanel(el,d.stats[k[0]],gl.list,gl.colour,!!k[1],refOf?refOf(k[0]):[])})}
+function derived(){var box=$("derivedbody"),gl=groupLists();box.innerHTML="";
+ $("derivedleg").innerHTML=groupLegend(gl);
+ scalarPanels(box,[["growth"],["peak",true],["peak_at"],["negative"],["noise"]],gl)}
+
+// ---- the structure of the delays ------------------------------------------
+// Each delay summary split by the group-by factor as above, with the German
+// and BDBV values (refList) where the workflow has built them.
+var REFSTAT={delay:function(e){return e.structure.overall.mean},releases:function(e){return e.structure.releases.per_week}};
+function refStat(k){return refsOf(function(e){return REFSTAT[k]?REFSTAT[k](e):e.scalars?e.scalars[k]:null})}
+function delays(){var d=S.data,box=$("delaysbody"),gl=groupLists();
+ if(!d.derived||!d.derived.delay_time){box.innerHTML='<p class=mut>This source was summarised before these summaries; it is summarised again on the next refresh.</p>';$("delaysleg").innerHTML="";return}
+ var built=refList();
+ $("delaysleg").innerHTML=groupLegend(gl,built.map(function(r){return '<span><svg width=22 height=8><line x1=0 x2=22 y1=4 y2=4 stroke="var(--fg)" stroke-width=1.5 stroke-dasharray="'+r[2]+'"></line></svg><span title="'+esc(S.ref[r[0]].label||r[1])+'">'+esc(r[1])+'</span></span>'}).join(""));
+ var tb=[];for(var t=1;t<=(d.time_bins||10);t++)tb.push(t);
+ var curves=[["cdf","Share reported by delay","delay (days)",d.delay_points,{y0:0}],
+  ["delay_time","Mean delay over the series, over its mean","tenth of the series",tb,{hline:1}],
+  ["ref_delay","Mean delay by reference weekday, less the mean (days)","weekday of reference",DAYS,{hline:0}],
+  ["refdow","Counts by reference weekday, over the mean","weekday of reference",DAYS,{hline:1}],
+  ["repdow","Counts by report weekday, over the mean","weekday of report",DAYS,{hline:1}],
+  ["release_days","Share of releases on each weekday","weekday of release",DAYS,{y0:0}],
+  ["gaps","Share of gaps between releases","days between releases",["1","2","3","4","5","6","7","8+"],{y0:0}]];
+ box.innerHTML=curves.map(function(c){return '<div class="card lpanel"><h3 title="'+esc(c[1])+'">'+c[1]+'</h3><div data-c="'+c[0]+'"></div></div>'}).join("");
+ scalarPanels(box,[["delay"],["within7"],["within14"],["within28"],["delay_drift"],["delay_trend"],["dow_delay"],["strata_spread"],
+  ["releases"],["gap"],["first_report"],["release_weekdays"],["wait"],["wait_share"]],gl,refStat);
+ curves.forEach(function(c){var o=Object.assign({refs:refsOf(function(e){return e.curves?e.curves[c[0]]:null})},c[4]);
+  curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]}).filter(Boolean)},gl.list,gl.colour,o)});
+ if(!built.length)box.insertAdjacentHTML("afterbegin",'<p class=mut style="grid-column:1/-1">No data to compare with on this machine yet: build the workflow rule <code>delay_reference</code>.</p>')}
 
 function sample(ix,cap){if(ix.length<=cap)return ix;var out=[],step=ix.length/cap;
  for(var j=0;j<cap;j++)out.push(ix[Math.floor(j*step)]);return out}
@@ -347,7 +391,7 @@ function openSim(id){S.sim=id;$("simid").value=id;setHash();$("dive").open=true;
  $("divestatus").textContent="loading…";
  fetch("sim/"+encodeURIComponent(S.src)+"/"+encodeURIComponent(id)+".json").then(function(r){
   if(!r.ok)throw new Error(r.status===404?"no such simulation in "+S.src:"error "+r.status);return r.json()})
-  .then(function(j){$("divestatus").textContent="";dive(j);$("dive").scrollIntoView({behavior:"smooth"})})
+  .then(function(j){$("divestatus").textContent="";S.dive=j;dive(j);$("dive").scrollIntoView({behavior:"smooth"})})
   .catch(function(e){$("divestatus").textContent=e.message;$("divebody").innerHTML=""})}
 function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexOf(j.id);
  var cards=[["strata","Final counts by stratum"],["known","As known at three cut-offs"],["delays","Share reported by delay"],
@@ -357,7 +401,8 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
   " strata; mean delay "+fmt(S.data.stats.delay[i])+" days. "+LAYERS.map(function(l){var fs=Object.keys(S.data.factors).filter(function(k){return S.data.layers[k]===l}).slice(0,4);
    return fs.length?"<b>"+l+"</b>: "+fs.map(function(k){return esc(level(k,i))}).join(", "):""}).filter(Boolean).join("; ")+".</p>":"";
  box.innerHTML='<h3>'+esc(j.id)+'</h3>'+head+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+
-  '</div><h3 style="margin-top:10px">Settings by layer</h3><div class=plots3 id=d-set></div>';
+  '</div><div id=d-struct></div><h3 style="margin-top:10px">Settings by layer</h3><div class=plots3 id=d-set></div>';
+ diveDelays(j.structure);
  // Strata: the eight largest each, the rest summed as "other", and the total.
  var names=Object.keys(j.strata),tot=function(n){return j.strata[n].reduce(function(a,b){return a+b},0)};
  names.sort(function(a,b){return tot(b)-tot(a)});
@@ -391,10 +436,60 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
    var v=parts.map(one).slice(0,6).join("; ")+(parts.length>6?" … ("+parts.length+")":"");
    return "<tr><td>"+esc(s.name)+'</td><td title="'+esc(parts.length>6?parts.map(one).join("; "):"")+'">'+esc(v)+"</td></tr>"}).join("")+"</table></div>"}).join("")}
 
+// The deep dive's delay structure: by reference and by release week, by
+// weekday and by stratum, and the release gaps, each against Germany's and
+// BDBV's where the panel's scale is shared.
+function weekSeries(w){var x=w.week.map(dayNum),c=PAL[0];
+ return [{x:x,y:w.q90,colour:c,w:1,op:.5,dash:"3 2",name:"90%"},{x:x,y:w.q10,colour:c,w:1,op:.5,dash:"3 2",name:"10%"},
+  {x:x,y:w.q50,colour:c,w:1.5,name:"median"},{x:x,y:w.mean,colour:"var(--fg)",w:2,name:"mean"}]}
+function refSeries(get,x){return refsOf(get).map(function(r){return {x:x,y:r.v,colour:"var(--fg)",w:1.5,dash:r.dash,name:r.label}})}
+function legendOf(ser){return ser.map(function(s){return '<span><svg width=22 height=8><line x1=0 x2=22 y1=4 y2=4 stroke="'+s.colour+'" stroke-width=2'+(s.dash?' stroke-dasharray="'+s.dash+'"':'')+(s.op?' stroke-opacity='+s.op:'')+'></line></svg>'+esc(s.name)+'</span>'}).join("")}
+function strataPanel(el,rows){var shown=rows.filter(function(r){return r.mean!==null}).slice(0,16),W=width(el),L=110,R=14,T=6,rh=18,B=30,H=T+shown.length*rh+B,pw=W-L-R,g=[];
+ if(!shown.length){el.innerHTML="<p class=mut>Too few cases.</p>";return}
+ var hi=Math.max.apply(null,shown.map(function(r){return r.q90}))||1,sx=function(v){return L+v/hi*pw};
+ ticks(0,hi,4).forEach(function(v){g.push('<line class=grid x1='+sx(v)+' x2='+sx(v)+' y1='+T+' y2='+(H-B)+'></line><text class=ax x='+sx(v)+' y='+(H-B+12)+' text-anchor=middle>'+fmt(v)+'</text>')});
+ g.push('<text class=ax x='+(L+pw/2)+' y='+(H-3)+' text-anchor=middle>delay (days)</text>');
+ shown.forEach(function(r,i){var y=T+i*rh+rh/2,c=r.level==="child"?PAL[0]:"var(--fg)",name=(r.level==="child"?"\u00a0\u00a0":"")+r.name;
+  g.push('<g><title>'+esc(r.name)+' ('+r.level+', '+fmt(r.n)+' cases): mean '+fmt(r.mean)+', median '+r.q50+', 10 to 90% '+r.q10+' to '+r.q90+'</title>'+
+   '<text class=ax x='+(L-6)+' y='+(y+4)+' text-anchor=end'+(r.level==="child"?'':' style="font-weight:600"')+'>'+esc(name.length>16?name.slice(0,15)+"…":name)+'</text>'+
+   '<line x1='+sx(r.q10)+' x2='+sx(r.q90)+' y1='+y+' y2='+y+' stroke="'+c+'" stroke-width=2 opacity=.6></line>'+
+   '<line x1='+sx(r.q50)+' x2='+sx(r.q50)+' y1='+(y-5)+' y2='+(y+5)+' stroke="'+c+'" stroke-width=2></line>'+
+   '<circle cx='+sx(r.mean)+' cy='+y+' r=4 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
+   '<rect x=0 y='+(y-rh/2)+' width='+W+' height='+rh+' fill=transparent></rect></g>')});
+ el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>'}
+function diveDelays(st){var box=$("d-struct");
+ if(!st){box.innerHTML="";return}
+ var sc=function(e){return e&&e.scalars?e.scalars:{}},mine=st,wait=mine.releases.wait,mean=mine.overall.mean;
+ var cmp=function(k,lab){var parts=refList().map(function(r){var v=sc(S.ref[r[0]])[k];return r[1]+" "+fmt(v)});
+  return lab+(parts.length?" ("+parts.join(", ")+")":"")};
+ var spread=null,kids=mine.strata.filter(function(r){return r.level==="child"&&r.mean!==null});
+ if(kids.length>1){var n=kids.reduce(function(a,r){return a+r.n},0),m=kids.reduce(function(a,r){return a+r.n*r.mean},0)/n;
+  spread=Math.sqrt(kids.reduce(function(a,r){return a+r.n*(r.mean-m)*(r.mean-m)},0)/n)}
+ var note='<p class=cnote>Mean delay '+fmt(mean)+' days; '+cmp("wait","wait for the next release "+fmt(wait)+" days")+
+  "; "+cmp("strata_spread","spread of the strata's mean delays "+(spread===null?"–":fmt(spread))+" days")+
+  "; delays of reference dates to "+esc(dayLabel(dayNum(mine.last_rep)-mine.horizon))+" (the 95% delay, "+mine.horizon+" days, before the last report).</p>";
+ var cards=[["dref","Delay by reference week"],["drel","Delay by release week"],["dwd","Mean delay by reference weekday, less the mean"],
+  ["drw","Counts by report weekday, over the mean"],["dgap","Gaps between releases"],["dstr","Delay by stratum: total, parents, children"]];
+ box.innerHTML='<h3 style="margin-top:10px">Delay structure</h3>'+note+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+'</div>';
+ var rw=weekSeries(mine.by_ref),lw=weekSeries(mine.by_rel),wk={dates:dayLabel,ylab:"Delay (days)",hover:defaultHover,ymin:0};
+ lineChart($("d-dref"),Object.assign({series:rw},wk));$("l-dref").innerHTML=legendOf([rw[3],rw[2],Object.assign({},rw[1],{name:"10 and 90%"})]);
+ lineChart($("d-drel"),Object.assign({series:lw},wk));$("l-drel").innerHTML=$("l-dref").innerHTML;
+ var dx=[0,1,2,3,4,5,6],dfmt=function(v){return DAYS[v]||""};
+ var wd=[{x:dx,y:mine.dow.ref_delay,colour:PAL[0],w:2,name:"this simulation"}].concat(refSeries(function(e){return e.curves?e.curves.ref_delay:null},dx));
+ lineChart($("d-dwd"),{series:wd,xt:dx,xfmt:dfmt,hline:0,ylab:"Days",hover:defaultHover});$("l-dwd").innerHTML=legendOf(wd);
+ var rp=[{x:dx,y:mine.dow.rep_share,colour:PAL[0],w:2,name:"this simulation"}].concat(refSeries(function(e){return e.curves?e.curves.repdow:null},dx));
+ lineChart($("d-drw"),{series:rp,xt:dx,xfmt:dfmt,hline:1,ymin:0,ylab:"Over the mean",hover:defaultHover});$("l-drw").innerHTML=legendOf(rp);
+ var gx=[1,2,3,4,5,6,7,8],gaps=mine.releases.gaps||[];
+ var gp=[{x:gx,y:gaps,colour:PAL[0],w:2,name:"this simulation"}].concat(refSeries(function(e){return e.curves?e.curves.gaps:null},gx));
+ lineChart($("d-dgap"),{series:gp,xt:gx,xfmt:function(v){return v===8?"8+":String(v)},ymin:0,xlab:"Days between releases",ylab:"Share of gaps",hover:defaultHover});
+ $("l-dgap").innerHTML=legendOf(gp)+'<span class=mut>'+mine.releases.n+' releases, '+fmt(mine.releases.per_week)+' a week</span>';
+ strataPanel($("d-dstr"),mine.strata);
+ $("l-dstr").innerHTML='<span class=mut>Line 10 to 90%, tick median, dot mean; bold the total and parents. The largest 16.</span>'}
+
 // ---- wiring ------------------------------------------------------------
 function update(){S.shown=filtered();chips();
  $("status").textContent=S.shown.length.toLocaleString()+" of "+S.data.ids.length.toLocaleString()+" shown";
- summary();layers();derived();spaghetti();table()}
+ summary();layers();derived();delays();spaghetti();table()}
 function setHash(){var h="src="+encodeURIComponent(S.src||"")+(S.sim?"&sim="+encodeURIComponent(S.sim):"");
  history.replaceState(null,"","#"+h)}
 function readHash(){var o={};location.hash.slice(1).split("&").forEach(function(p){var kv=p.split("=");if(kv[0])o[kv[0]]=decodeURIComponent(kv[1]||"")});return o}
@@ -421,6 +516,7 @@ window.addEventListener("hashchange",function(){var h=readHash();
  if(h.src&&h.src!==S.src){$("source").value=h.src;load(h.src,h.sim)}
  else if(h.sim&&h.sim!==S.sim)openSim(h.sim)});
 var resized;window.addEventListener("resize",function(){clearTimeout(resized);resized=setTimeout(function(){if(S.data)update()},250)});
+fetch("reference.json").then(function(r){return r.ok?r.json():{}}).then(function(ref){S.ref=ref||{};if(S.data){delays();if(S.sim&&S.dive)dive(S.dive)}}).catch(function(){});
 fetch("sources.json").then(function(r){return r.json()}).then(function(list){
  if(!list.length){$("status").textContent="No simulations under this machine's ROOT yet.";return}
  $("source").innerHTML=list.map(function(s){return "<option value='"+esc(s.key)+"'>"+esc(s.key)+(s.simulations!==null?" ("+s.simulations+")":"")+"</option>"}).join("");

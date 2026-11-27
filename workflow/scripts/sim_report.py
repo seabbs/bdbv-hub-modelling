@@ -181,9 +181,10 @@ def bdbv_delay_rows(daily: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def _entry(label: str, rows: pd.DataFrame) -> dict:
+def _entry(short: str, label: str, rows: pd.DataFrame) -> dict:
     s = ds.structure(rows)
     return {
+        "short": short,
         "label": label,
         "structure": s,
         "scalars": ds.scalars(s),
@@ -202,10 +203,12 @@ def delay_reference(triangle: Path, split: str, daily: Path) -> dict:
     wide = pd.read_csv(triangle)
     return {
         "germany": _entry(
+            "Germany",
             "Germany (development half, states)",
             germany_delay_rows(wide, split),
         ),
         "bdbv": _entry(
+            "BDBV",
             "BDBV (hub releases, provinces)",
             bdbv_delay_rows(pd.read_csv(daily)),
         ),

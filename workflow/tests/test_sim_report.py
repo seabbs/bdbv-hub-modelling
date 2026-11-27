@@ -285,6 +285,8 @@ def test_the_delay_reference_has_germany_and_bdbv(tmp_path):
     got = sr.delay_reference(tri, "2022-02-10", daily)
     assert set(got) == {"germany", "bdbv"}
     for entry in got.values():
-        assert {"label", "structure", "scalars", "curves"} <= set(entry)
+        assert {"short", "label", "structure", "scalars", "curves"} <= set(
+            entry
+        )
     assert got["germany"]["structure"]["overall"]["mean"] == 0.5
     json.dumps(got)
