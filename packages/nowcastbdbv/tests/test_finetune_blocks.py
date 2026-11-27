@@ -24,10 +24,13 @@ def test_the_cut_is_the_configs_release_and_truth_date():
 
 
 def test_every_release_to_the_cut_is_a_slice():
-    # Every public release up to the cut, each cut once.
+    # Every public release up to the cut, each cut once, less the first
+    # release, a cumulative dump the Ebola study leaves out.
     inputs = fb.load_inputs(FIXTURE_DATA)
     releases = fb.releases(inputs, fb.realdata_cut())
     assert releases == sorted(set(releases))
+    assert releases[0] == "2026-10-09"
+    assert "2026-08-18" not in releases
     assert releases[-1] == "2026-11-08"
     assert all(r <= "2026-11-08" for r in releases)
 
@@ -55,6 +58,33 @@ def test_no_bdbv_truth_after_the_truth_date(blocks):
         assert b["truth_end"] <= cut.truth_until
         assert len(b["times"]) == b["context"].shape[1]
         assert np.isnan(_late(b, cut.truth_until)).all()
+
+
+@pytest.mark.slow
+def test_every_release_trains_where_it_has_truth(blocks):
+    # The maximum delay's lags reach back before the truth date, so each
+    # release's blocks hold truth there and are masked only after it.
+    cut = fb.realdata_cut()
+    assert {b["cut"] for b in blocks} == set(
+        fb.releases(fb.load_inputs(FIXTURE_DATA), cut)
+    )
+    for b in blocks:
+        kept = [
+            i
+            for i, t in enumerate(b["times"])
+            if t and t <= cut.truth_until and i >= 364
+        ]
+        assert kept
+        assert not np.isnan(b["context"][: b["n_targets"], kept]).all()
+
+
+@pytest.mark.slow
+def test_the_lags_are_the_ebola_maximum_delay(blocks):
+    # 42 days (backtest.toml `max_delay`), lags 0 to 42, jittered in 10%
+    # of blocks, or what the history holds when it is shorter.
+    lags = [b["lag"] for b in blocks]
+    assert max(lags) <= 43 * 1.3
+    assert sum(lag == 43 for lag in lags) >= 0.5 * len(lags)
 
 
 @pytest.mark.slow
