@@ -38,5 +38,27 @@ def test_the_round_s_check_is_recorded(tmp_path):
     )
     qc = tmp_path / "r1" / "qc"
     assert sorted(p.name for p in qc.iterdir()) == ["input.csv", "summary.txt"]
-    assert len(pd.read_csv(qc / "input.csv")) == 4
+    table = pd.read_csv(qc / "input.csv")
+    assert len(table) == 4
+    assert (table["withdrawn_share"] >= 0).all()
     assert "summarised 4 simulations" in (qc / "summary.txt").read_text()
+
+
+def test_the_qc_lists_every_structure_factor():
+    from nowcastfoundation.finetune.qc import CELL
+
+    for factor in (
+        "delay_strata_noise",
+        "delay_change_strata",
+        "delay_change_switch",
+        "delay_change_combine",
+        "delay_counts",
+        "bursts",
+        "ascertainment_change",
+        "ascertainment_change_strata",
+        "ascertainment_change_switch",
+        "ascertainment_counts",
+        "ascertainment_noise",
+    ):
+        assert factor in CELL
+        assert factor in GRID["factors"]

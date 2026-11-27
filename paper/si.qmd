@@ -161,6 +161,9 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 ::: {.callout-note title="Plan"}
 - We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.
 - We ascertain a share of the reference events as cases.
+- In half of simulations ascertainment changes over time on the logit scale, by a drift, a step, a periodic or smooth cycle or a weekly walk, shared by the strata, related or independent between them, and possibly diverging or converging part way through.
+- In half of simulations ascertainment also depends on each stratum's log expected counts by reference date, lower at peaks as testing saturates in 60% of slopes and higher with more attention otherwise.
+- Ascertainment can also take noise by week, by stratum, or by stratum and week.
 - We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.
 - Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise."
 - Table (planned): "Layer 2, sampling distributions of the observation settings, each with its reason."
@@ -173,7 +176,10 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
 - Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
 - In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.
-- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
+- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change, or by two of them combined.
+- Strata share the delay change, mix it with a change of their own, or each follow their own, so one place's delays can lengthen while the others' stay the same, and strata can share the change for part of the series and then diverge, or the reverse.
+- In half of simulations the delay depends on each stratum's log expected counts by reference date, not its infections: longer when counts are high in 65% of slopes and shorter otherwise, as the German states show both.
+- Every delay parameter takes noise by week shared by the strata, by stratum, or by stratum and week, in any mix.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
 - Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
 :::
@@ -190,6 +196,8 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 - Reporting shocks add backlogs or outages.
 - Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
+- The share reported in error is a few percent in most strata, with a tail to half or more of a release.
+- In 5% of simulations a short over-reporting burst, usually in one stratum, first reports a few days to two weeks of reference dates at 1.5 to 7 times their final count and withdraws the excess within 1 to 7 days, as Bremen's hospitalisations in January 2022.
 - Some cases are filed under a nearby reference day and moved later.
 - The target is still the final count, and lag series can then fall from one lag to the next.
 - Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
