@@ -13,6 +13,8 @@ paper's reference values (`paper/data/reference-values.csv`):
    exists;
 3. the structure of the reporting delays (`flowlib.delay_structure`):
    over time, by weekday, between strata and with the release cadence,
+   each stratum's delays week by week (how they move together, follow
+   the counts and burst, and the delay's noise by part),
    against the German development half's and the BDBV releases'
    (`delays`, written by the `delay_reference` rule);
 4. flags: attack rates above 1, redrawn draws and why, and the sim-realism
@@ -876,6 +878,11 @@ LAYERS = [
             "delay_family",
             "delay_dow",
             "delay_places",
+            "delay_jitter",
+            "delay_change_switch",
+            "delay_change_combine",
+            "delay_counts",
+            "delay_strata_noise",
         ],
     ),
     (
@@ -896,6 +903,7 @@ LAYERS = [
             "report_dow",
             "revisions",
             "shocks",
+            "bursts",
         ],
     ),
     (
@@ -904,7 +912,14 @@ LAYERS = [
             ("leaves", "Strata (leaves)", None, False),
             ("nesting_depth", "Nesting depth", None, False),
         ],
-        ["layout", "strata_link", "reporting_strata", "spread", "place_rt"],
+        [
+            "layout",
+            "strata_link",
+            "reporting_strata",
+            "spread",
+            "place_rt",
+            "delay_change_strata",
+        ],
     ),
 ]
 
@@ -1221,6 +1236,18 @@ SCALARS = [
     ("wait", "Days waiting for the next release"),
     ("wait_share", "Share of the delay waiting for a release"),
     ("strata_spread", "Spread of the strata's mean delays (sd, days)"),
+    ("strata_corr", "Strata's weekly mean delays, mean correlation"),
+    ("strata_corr_min", "Lowest stratum's mean correlation"),
+    ("share7_sd", "Largest stratum's sd of weekly share by day 7"),
+    ("counts_slope", "Mean delay on log daily count (days)"),
+    ("counts_corr", "Mean delay with log daily count (r)"),
+    ("share1_counts_corr", "Share by day 1 with log daily count (r)"),
+    ("burst_ratio", "Largest weekly first report over final"),
+    ("withdrawn_share", "Share of final cases ever withdrawn"),
+    ("withdrawn_max", "Largest stratum's share withdrawn"),
+    ("noise_time", "Delay noise: share common to strata"),
+    ("noise_strata", "Delay noise: share fixed by stratum"),
+    ("noise_residual", "Delay noise: share by stratum and week"),
 ]
 """The delay numbers the report compares: key and title."""
 
@@ -1294,8 +1321,12 @@ def curves_figure(structs: list[dict], reference: dict):
 
 def scalars_figure(structs: list[dict], reference: dict):
     """Return the delay numbers' histograms with Germany's and BDBV's."""
-    fig, axes = plt.subplots(2, 4, figsize=(14, 5.2))
-    for ax, (key, title) in zip(axes.ravel(), SCALARS, strict=True):
+    rows = -(-len(SCALARS) // 4)
+    fig, axes = plt.subplots(rows, 4, figsize=(14, 2.6 * rows))
+    axes = axes.ravel()
+    for ax in axes[len(SCALARS) :]:
+        ax.set_visible(False)
+    for ax, (key, title) in zip(axes, SCALARS, strict=False):
         v = pd.Series(
             [s["mean"] if key == "mean" else s["scalars"][key]
              for s in structs], dtype=float,
@@ -1325,6 +1356,59 @@ def scalars_figure(structs: list[dict], reference: dict):
     return fig
 
 
+STRATA_PANELS = [
+    ("mean", "Mean delay by stratum (days)"),
+    ("share7", "Share reported by day 7"),
+    ("counts", "Mean delay against log daily count"),
+    ("first_ratio", "First report over final count"),
+]
+"""The panels of each data set's strata, week by week: key and title."""
+
+
+def strata_figure(reference: dict):
+    """Return each data set's strata's delays week by week.
+
+    A row per data set (`structure`'s `by_stratum`): each stratum's mean
+    delay, share by day 7 and first-report-to-final ratio by reference
+    week, and its weekly mean delay against its log daily count. None
+    with no data set's strata.
+    """
+    sets = [
+        e
+        for e in reference.values()
+        if e and (e.get("structure") or {}).get("by_stratum")
+    ]
+    if not sets:
+        return None
+    fig, axes = plt.subplots(
+        len(sets), len(STRATA_PANELS), figsize=(14, 3.2 * len(sets))
+    )
+    axes = np.atleast_2d(axes)
+    for row, entry in zip(axes, sets, strict=True):
+        by = entry["structure"]["by_stratum"]
+        weeks = pd.to_datetime(by["week"])
+        colours = plt.cm.tab20(np.linspace(0, 1, max(len(by["strata"]), 2)))
+        for ax, (key, title) in zip(row, STRATA_PANELS, strict=True):
+            for line, colour in zip(by["strata"], colours, strict=False):
+                if key == "counts":
+                    x = np.array(line["log_count"], dtype=float)
+                    y = np.array(line["mean"], dtype=float)
+                    ax.scatter(x, y, s=6, color=colour, alpha=0.6)
+                    continue
+                y = np.array(line[key], dtype=float)
+                ax.plot(weeks, y, color=colour, lw=0.9, alpha=0.8)
+            if key != "counts":
+                total = np.array(by["total"][key], dtype=float)
+                ax.plot(weeks, total, color=INK, lw=1.8)
+                ax.tick_params(axis="x", labelrotation=30, labelsize=6)
+            if key == "first_ratio":
+                ax.axhline(1, color=MUTED, lw=0.8, ls=":")
+            ax.set_title(f"{entry.get('short', entry['label'])}: {title}")
+            _style(ax)
+    fig.tight_layout()
+    return fig
+
+
 def delay_section(dirs: dict, reference: dict) -> str:
     """Return the structure of the delays against Germany's and BDBV's."""
     structs = sim_structures(dirs)
@@ -1343,9 +1427,23 @@ def delay_section(dirs: dict, reference: dict) -> str:
         "is a report date with any count; the wait is the days from a "
         "reference date to the next release, the part of the delay the "
         "release cadence sets. Strata are the leaves (places, ages or "
-        "both; the German states; the BDBV provinces).</p>"
+        "both; the German states; the BDBV provinces). Each stratum's "
+        "delays are also read week by week: how strata's weekly mean "
+        "delays correlate, the delay's slope on the log daily count "
+        "within strata, the first report over the final count (above 1 "
+        "is over-reporting later withdrawn) and the share of the weekly "
+        "log mean delay's variation common to strata, fixed by stratum "
+        "or by stratum and week.</p>"
         + png(curves_figure(structs, reference))
         + png(scalars_figure(structs, reference))
+        + (
+            "<h3>Each stratum's delays, week by week</h3>"
+            "<p>Each stratum of the data a line (the total in black); "
+            "weeks with fewer than "
+            f"{ds.MIN_COUNT} cases are left out.</p>" + png(fig)
+            if (fig := strata_figure(reference)) is not None
+            else ""
+        )
     )
 
 

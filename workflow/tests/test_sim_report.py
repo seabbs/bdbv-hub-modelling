@@ -123,6 +123,7 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     assert "<h2>3. Structure of the delays</h2>" in page
     assert "Germany" in page
     assert "BDBV" in page
+    assert "<h3>Each stratum's delays, week by week</h3>" in page
 
 
 def test_shares_count_shifts_and_reactive_ones():
@@ -312,3 +313,40 @@ def test_the_delay_reference_has_germany_and_bdbv(tmp_path):
         )
     assert got["germany"]["structure"]["overall"]["mean"] == 0.5
     json.dumps(got)
+
+
+def test_the_delay_structure_factors_are_in_the_layers():
+    factors = {f for _, _, fs in sr.LAYERS for f in fs}
+    for name in (
+        "delay_change_strata",
+        "delay_change_switch",
+        "delay_change_combine",
+        "delay_counts",
+        "delay_strata_noise",
+        "delay_jitter",
+        "bursts",
+    ):
+        assert name in factors
+
+
+def test_the_report_compares_each_new_delay_number():
+    from flowlib import delay_structure as ds
+
+    s = ds.structure(
+        pd.DataFrame(
+            {"stratum": ["A", "B"] * 30,
+             "ref": pd.date_range("2026-01-05", periods=60),
+             "rep": pd.date_range("2026-01-07", periods=60),
+             "count": 10}
+        )
+    )  # fmt: skip
+    keys = {k for k, _ in sr.SCALARS}
+    assert set(ds.scalars(s)) <= keys
+
+
+def test_the_strata_figure_draws_each_data_set_s_strata():
+    fig = sr.strata_figure(_reference())
+    assert fig is not None
+    assert len(fig.axes) == 2 * len(sr.STRATA_PANELS)
+    sr.plt.close(fig)
+    assert sr.strata_figure({}) is None
