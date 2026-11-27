@@ -165,6 +165,9 @@ UNIT_THREADS = SCORING.unit_threads
 SCORE_WORKERS = SCORING.score_workers
 UNIT_MEMORY = SCORING.unit_memory_floor()
 EVALUATE_THREADS = SCORING.evaluate_threads
+EVALUATION_MEMORY = SCORING.evaluation_memory_floor()
+# A held-out pass's workers, from its job's threads.
+evaluation_workers = lambda wc, threads: SCORING.evaluation_workers(threads)
 FORECAST = SCORING.forecast
 CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
 GERMANY_FORECAST = SCORING.germany_forecast

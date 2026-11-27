@@ -5,7 +5,12 @@
 # (`compute.scoring_forecast`): the CPU with the cores the trainer leaves
 # while a run trains, a whole GPU once none does, right after the
 # hand-offs and the next segment's batches (`Scoring.evaluation_priority`).
-# It never pauses training, and no release or check waits for it.
+# It never pauses training, and no release or check waits for it. On the
+# CPU, step 0's and a checkpoint's one pass split their batches over
+# worker processes, one for each `forecast.threads` of the rule's threads
+# (`Scoring.evaluation_workers`, EVALUATE_WORKERS), with the same results
+# however many run; their memory floor is each worker's and the
+# coordinator's (`Scoring.evaluation_memory_floor`).
 # Files and readers: workflow/flowlib/evaluations.py.
 
 
@@ -33,7 +38,9 @@ rule evaluate_base:
     threads: EVALUATE_THREADS
     resources:
         mem_mb=memory.from_benchmark(
-            f"{TRAIN}/benchmarks/evaluate_base.tsv", 4096, like=("run",)
+            f"{TRAIN}/benchmarks/evaluate_base.tsv",
+            EVALUATION_MEMORY,
+            like=("run",),
         ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
@@ -46,8 +53,10 @@ rule evaluate_base:
             f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
         ],
         cache=f"{CACHE}/held-out-base",
+        workers=evaluation_workers,
     shell:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        "EVALUATE_WORKERS={params.workers} "
         f"{EVALUATE_PY} base {{params.where}} --device {{params.device}} "
         "--cache {params.cache} > {log} 2>&1"
 
@@ -78,7 +87,9 @@ rule evaluate_checkpoint:
     threads: EVALUATE_THREADS
     resources:
         mem_mb=memory.from_benchmark(
-            f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv", 4096, like=("n",)
+            f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv",
+            EVALUATION_MEMORY,
+            like=("n",),
         ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
@@ -87,8 +98,10 @@ rule evaluate_checkpoint:
         device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
+        workers=evaluation_workers,
     shell:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        "EVALUATE_WORKERS={params.workers} "
         f"{EVALUATE_PY} checkpoint {{params.where}} --device {{params.device}} "
         "> {log} 2>&1"
 

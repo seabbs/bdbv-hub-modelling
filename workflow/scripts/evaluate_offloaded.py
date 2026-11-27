@@ -13,7 +13,9 @@ blocks and `validation-base` base Chronos-2's of the same blocks
 (`evaluations.VALIDATION_FILE`, `VALIDATION_BASE`), with the trainer's own
 losses
 (nowcastfoundation.finetune.evaluate); the files are as
-`flowlib.evaluations` says.
+`flowlib.evaluations` says. On the CPU, `base` and `checkpoint` split
+their one pass over `EVALUATE_WORKERS` worker processes
+(`fe.evaluate_workers`), the rule's threads shared out between them.
 """
 
 from __future__ import annotations
@@ -109,12 +111,14 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
     todo = sorted(todo, key=evaluations.step_of, reverse=True)
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}
+    path = train / fs.HELD_OUT_BLOCKS
     for snap in todo:
         n = json.loads((snap / "request.json").read_text()).get("n_validation")
         if n not in blocks:
-            blocks[n] = fe.load_blocks(train / fs.HELD_OUT_BLOCKS, n)
+            blocks[n] = fe.load_blocks(path, n)
+        split = fe.Split(fe.evaluate_workers(device), path, n)
         with logging_batches(snap.name):
-            result = fe.snapshot_result(base, snap, blocks[n], device)
+            result = fe.snapshot_result(base, snap, blocks[n], device, split)
         fe.write_json(snap.with_name(snap.name + ".json"), result)
         kinds = ", ".join(result["kinds"])
         fs.log(f"{snap.name}: {kinds} in {result['seconds']:.0f} s")
@@ -123,9 +127,10 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
 def checkpoint(where: Path, device: str) -> None:
     """Score a checkpoint's adapter and write its held-out sidecar."""
     settings = json.loads((where / "settings.json").read_text())
-    blocks = fe.load_blocks(
-        where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
-    )
+    path = where.parent / fs.HELD_OUT_BLOCKS
+    n = settings.get("n_validation")
+    blocks = fe.load_blocks(path, n)
+    split = fe.Split(fe.evaluate_workers(device), path, n)
     try:
         with logging_batches(where.name):
             got = fe.write_checkpoint_sidecar(
@@ -134,6 +139,7 @@ def checkpoint(where: Path, device: str) -> None:
                 blocks,
                 device,
                 settings.get("batch_size", 256),
+                split,
             )
     except ValueError as error:
         raise SystemExit(str(error)) from error
