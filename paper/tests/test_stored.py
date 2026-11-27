@@ -11,8 +11,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
-
 from nowcastutils import pointers
+
 from paperpipe import stored
 from paperpipe.flow import PaperFlow
 
@@ -200,7 +200,7 @@ def test_a_broken_pointer_fails_the_fetch(
         stored.fetch(
             tmp_path / "stored",
             _pointer(gh),
-            lambda tag, dest: dest,
+            lambda _tag, dest: dest,
             ["germany"],
         )
 

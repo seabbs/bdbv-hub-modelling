@@ -81,9 +81,10 @@ rule promote_main:
     params:
         run=config["live_run"],
         where=lambda wc, input: Path(input[0]).parent,
+        branches=PROMOTE_BRANCHES,
     shell:
         "uv run python workflow/scripts/publish_checkpoint.py --main "
-        "{params.run} {params.where} {output} > {log} 2>&1"
+        "{params.run} {params.where} {output} {params.branches} > {log} 2>&1"
 
 
 rule ft_check_release:

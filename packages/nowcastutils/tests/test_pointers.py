@@ -66,7 +66,7 @@ def test_an_unreleased_version_is_never_promoted(fake_releases) -> None:
         _promote(gh)
     # Released without the asset its readers need.
     gh = fake_releases({"thing-abc": {}})
-    with pytest.raises(RuntimeError, match="data.tar.gz"):
+    with pytest.raises(RuntimeError, match=r"data\.tar\.gz"):
         _promote(gh, needs="data.tar.gz")
     assert "thing-main" not in gh.releases
 
