@@ -119,7 +119,7 @@ window.Quarto = {
   <li><a href="#checkpoint-curve" id="toc-checkpoint-curve" class="nav-link" data-scroll-target="#checkpoint-curve">Checkpoint curve</a></li>
   <li><a href="#daily-nowcasts" id="toc-daily-nowcasts" class="nav-link" data-scroll-target="#daily-nowcasts">Daily nowcasts</a></li>
   <li><a href="#real-data-fine-tune-against-synthetic" id="toc-real-data-fine-tune-against-synthetic" class="nav-link" data-scroll-target="#real-data-fine-tune-against-synthetic">Real-data fine-tune against synthetic</a></li>
-  <li><a href="#attention-biases-for-place-and-parent-against-none" id="toc-attention-biases-for-place-and-parent-against-none" class="nav-link" data-scroll-target="#attention-biases-for-place-and-parent-against-none">Attention biases for place and parent against none</a></li>
+  <li><a href="#attention-bias-setups" id="toc-attention-bias-setups" class="nav-link" data-scroll-target="#attention-bias-setups">Attention bias setups</a></li>
   <li><a href="#delays-against-no-delays" id="toc-delays-against-no-delays" class="nav-link" data-scroll-target="#delays-against-no-delays">Delays against no delays</a></li>
   <li><a href="#impact-of-correlated-trajectories" id="toc-impact-of-correlated-trajectories" class="nav-link" data-scroll-target="#impact-of-correlated-trajectories">Impact of correlated trajectories</a></li>
   <li><a href="#renewal-model-variants" id="toc-renewal-model-variants" class="nav-link" data-scroll-target="#renewal-model-variants">Renewal model variants</a></li>
@@ -281,35 +281,20 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 </section>
 <section id="lag-count" class="level4">
 <h4 class="anchored" data-anchor-id="lag-count">Lag count</h4>
-<div class="callout callout-style-default callout-note callout-titled" title="Plan">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Plan
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<p>The maximum delay <span class="math inline">\(D\)</span> sets the number of lagged series per place. It also sets the last complete date <span class="math inline">\(E\)</span>, the latest release less <span class="math inline">\(D\)</span>. We either estimate <span class="math inline">\(D\)</span> from the data or set it by hand.</p>
+<p><strong>Estimating <span class="math inline">\(D\)</span>.</strong> We estimate <span class="math inline">\(D\)</span> from the release history up to the cut-off, in four steps.</p>
+<ol type="1">
+<li>For each reference date first published after releases began, we find the first reporting delay at which its reported count reaches 98% of its latest count. We call this its settling delay.</li>
+<li>We keep only reference dates seen for at least <span class="math inline">\(1.5D\)</span> days, so that their latest count stands for their final count and recent dates do not bias <span class="math inline">\(D\)</span> short.</li>
+<li><span class="math inline">\(D\)</span> is one more than the 98th percentile of the settling delays over the kept dates and places with a count.</li>
+<li>As step 2 depends on <span class="math inline">\(D\)</span>, we take the smallest <span class="math inline">\(D\)</span> that satisfies step 3.</li>
+</ol>
+<p>Reference dates before the first release are left out, as a first release that fills in earlier dates measures when releases began, not a delay. A delay on which no release fell carries the count of the delay before, as with weekly releases of daily data. If no reference date is old enough to have settled, <span class="math inline">\(D\)</span> is the whole release history. <span class="math inline">\(D\)</span> is capped only by the history, keeping two steps of context before the longest lag. Training blocks use the same rule, reading the simulation’s releases up to the cut-off. In 10% of training blocks we scale <span class="math inline">\(D\)</span> by a factor drawn from Normal(1, 0.05), so the model can handle <span class="math inline">\(D\)</span> set slightly differently. The rule is the same for the zero-shot and fine-tuned models. <!-- TODO: compare with baselinenowcast's quantile delay rule, truncate_to_quantile (#1279), and cite @Johnson2025. --></p>
+<p><strong>Setting <span class="math inline">\(D\)</span> by hand.</strong> A user can instead fix <span class="math inline">\(D\)</span> for their setting, and both case studies do so.</p>
 <ul>
-<li>Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.</li>
-<li>Each block or task has one lag count.</li>
-<li>Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.</li>
-<li>The lag count less one is the 98th percentile of these settling lags over the block’s steps and places with a count.</li>
-<li>Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.</li>
-<li>Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.</li>
-<li>A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.</li>
-<li>The estimate reads no release after the cut-off.</li>
-<li>In training it reads the simulation’s releases up to the cut-off, as prediction reads the real ones.</li>
-<li>The lag count is capped only by the history, keeping two steps of context before the longest lag.</li>
-<li>With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.</li>
-<li>Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.</li>
-<li>At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.</li>
-<li>The Ebola case study fixes it at 42 days, as the random walk nowcast uses, because too few onset days in the hub’s releases have settled to estimate it.</li>
-<li>A user can set a fixed count instead.</li>
+<li>For the German hub we set <span class="math inline">\(D\)</span> to 40 days, the delay at which the hub takes its truth, as our models see only reports made within 40 days of each reference date <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>For the Ebola hub we set <span class="math inline">\(D\)</span> to 42 days, based on our experience modelling the outbreak. The hub’s releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate <span class="math inline">\(D\)</span>. The random walk nowcast uses the same 42 days.</li>
 </ul>
-</div>
-</div>
 </section>
 </section>
 <section id="synthetic-data-generation" class="level3">
@@ -382,6 +367,9 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <ul>
 <li>We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.</li>
 <li>We ascertain a share of the reference events as cases.</li>
+<li>In half of simulations ascertainment changes over time on the logit scale, by a drift, a step, a periodic or smooth cycle or a weekly walk, shared by the strata, related or independent between them, and possibly diverging or converging part way through.</li>
+<li>In half of simulations ascertainment also depends on each stratum’s log expected counts by reference date, lower at peaks as testing saturates in 60% of slopes and higher with more attention otherwise.</li>
+<li>Ascertainment can also take noise by week, by stratum, or by stratum and week.</li>
 <li>We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.</li>
 <li>Figure (planned): “Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise.”</li>
 <li>Table (planned): “Layer 2, sampling distributions of the observation settings, each with its reason.”</li>
@@ -406,7 +394,10 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <li>The reporting delay has a drawn family and mean, and differs between places and age groups.</li>
 <li>Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.</li>
 <li>In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.</li>
-<li>The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.</li>
+<li>The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change, or by two of them combined.</li>
+<li>Strata share the delay change, mix it with a change of their own, or each follow their own, so one place’s delays can lengthen while the others’ stay the same, and strata can share the change for part of the series and then diverge, or the reverse.</li>
+<li>In half of simulations the delay depends on each stratum’s log expected counts by reference date, not its infections: longer when counts are high in 65% of slopes and shorter otherwise, as the German states show both.</li>
+<li>Every delay parameter takes noise by week shared by the strata, by stratum, or by stratum and week, in any mix.</li>
 <li>Figure (planned): “Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid.”</li>
 <li>Table (planned): “Layer 3, sampling distributions of the reporting delay settings, each with its reason.”</li>
 </ul>
@@ -435,6 +426,8 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <li>Reporting shocks add backlogs or outages.</li>
 <li>Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.</li>
 <li>Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.</li>
+<li>The share reported in error is a few percent in most strata, with a tail to half or more of a release.</li>
+<li>In 5% of simulations a short over-reporting burst, usually in one stratum, first reports a few days to two weeks of reference dates at 1.5 to 7 times their final count and withdraws the excess within 1 to 7 days, as Bremen’s hospitalisations in January 2022.</li>
 <li>Some cases are filed under a nearby reference day and moved later.</li>
 <li>The target is still the final count, and lag series can then fall from one lag to the next.</li>
 <li>Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.</li>
@@ -486,7 +479,7 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <ul>
 <li>We combine the five layers in every simulation.</li>
 <li>Figure (planned): “All layers combined. Sample simulations across the grid’s settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time.”</li>
-<li>The main text figure compares the grid’s summaries with the German development half and other diseases.</li>
+<li>The main text figure compares the grid’s summaries with the German development period and other diseases.</li>
 </ul>
 </div>
 </div>
@@ -574,6 +567,16 @@ Table&nbsp;2: The simulation grid, read from the grid config: by layer, each cat
 <td></td>
 </tr>
 <tr class="even">
+<td><code>delay_change_strata</code></td>
+<td><code>shared</code> (57%), <code>related</code> (29%), <code>independent</code> (14%)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><code>ascertainment_change_strata</code></td>
+<td><code>shared</code> (57%), <code>related</code> (29%), <code>independent</code> (14%)</td>
+<td></td>
+</tr>
+<tr class="even">
 <td><code>quiet</code></td>
 <td>Beta(1, 2) on [0, 0.9]</td>
 <td>even outbreaks reach most places; a few leave many quiet</td>
@@ -654,219 +657,289 @@ Table&nbsp;2: The simulation grid, read from the grid config: by layer, each cat
 <td>pooled strata within about x0.5 to x2 of the shared value</td>
 </tr>
 <tr class="even">
+<td><code>ascertainment_counts_sd</code></td>
+<td>LogNormal(median 0.3, sdlog 0.4)</td>
+<td>strata’s slopes of ascertainment on their counts within about x0.6 to x1.7 of the shared slope</td>
+</tr>
+<tr class="odd">
 <td><code>delay_age_sd</code></td>
 <td>HalfNormal(0.13)</td>
 <td>ages’ delays differ little</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>delay_place_sd</code></td>
 <td>LogNormal(median 0.28, sdlog 0.45)</td>
 <td>places’ delays differ by up to about x2</td>
 </tr>
+<tr class="odd">
+<td><code>delay_change_rho</code></td>
+<td>Beta(2, 2) on [0.3, 0.9]</td>
+<td>related strata share most but not all of their delay change, as correlated places share their R</td>
+</tr>
 <tr class="even">
+<td><code>delay_counts_sd</code></td>
+<td>LogNormal(median 0.3, sdlog 0.4)</td>
+<td>strata’s slopes of the delay on their counts, on the log scale, within about x0.6 to x1.7 of the shared slope</td>
+</tr>
+<tr class="odd">
 <td><code>unallocated_share</code></td>
 <td>Beta(3, 14)</td>
 <td>about 5% to 35% of a parent’s cases with no place or age</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>parent_lag_days</code></td>
 <td>LogNormal(median 7, sdlog 0.4)</td>
 <td>a parent reported about 3 to 15 days after its children</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>Infections</strong></td>
 <td></td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>window</code></td>
 <td><code>early</code> (25%), <code>endemic</code> (35%), <code>established</code> (40%)</td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>trajectory</code></td>
 <td><code>controlled</code> (25%), <code>oscillating</code> (17%), <code>growth</code> (8%), <code>decline</code> (8%), <code>flat</code> (8%), <code>rise_fall_sharp</code> (8%), <code>rise_fall_gradual</code> (8%), <code>fall_rise</code> (8%), <code>multi_wave</code> (8%)</td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>gt_family</code></td>
 <td><code>gamma</code>, <code>lognormal</code></td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>imports</code></td>
 <td><code>none</code>, <code>constant</code>, <code>pulses</code></td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>import_rate</code></td>
 <td>LogNormal(median 0.022, sdlog 0.9)</td>
 <td>a daily trickle of 0.5% to 10% of a stratum’s seed</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>import_size</code></td>
 <td>LogNormal(median 1.2, sdlog 0.55)</td>
 <td>pulses of half to three times a stratum’s seed</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>phase</code></td>
 <td>Uniform(0, 6.28)</td>
 <td>no favoured phase</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>weeks</code></td>
 <td>LogNormal(median 30, sdlog 0.25)</td>
 <td>series of about 4 to 9 months, few of them burnt-out tails</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>amplitude</code></td>
 <td>LogNormal(median 0.4, sdlog 0.5)</td>
 <td>shapes’ log R: R about x1.2 to x3 from 1</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>flat</code></td>
 <td>Normal(0, 0.05)</td>
 <td>a flat outbreak’s R within about 10% of 1</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>peak</code></td>
 <td>Beta(3, 3)</td>
 <td>a single wave turns away from the ends of the series</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>flip_days</code></td>
 <td>LogNormal(median 14, sdlog 0.6)</td>
 <td>a sharp turn over a few days to six weeks</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>period</code></td>
 <td>Gamma(mean 120, sd 60)</td>
 <td>cycles of about 1 to 8 months</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>wave_scale</code></td>
 <td>LogNormal(median 0.45, sdlog 0.5)</td>
 <td>waves of a fifth of the amplitude to above it</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>control_r</code></td>
 <td>LogNormal(median 1.8, sdlog 0.15)</td>
 <td>a controlled outbreak starts at R about 1.3 to 2.4 and settles towards 1</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>control_days</code></td>
 <td>LogNormal(median 42, sdlog 0.5)</td>
 <td>control or immunity brings R to about 1 over 2 to 16 weeks</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>r_drift</code></td>
 <td>LogNormal(median 0.8, sdlog 0.15)</td>
 <td>a slow fall of R by a tenth to a third over the series</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>shift_at</code></td>
 <td>Beta(2, 2)</td>
 <td>shifts in R away from the ends of the series</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>shift_size</code></td>
 <td>LogNormal(median 0.22, sdlog 0.4)</td>
 <td>shifts of R by about x1.1 to x1.6</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>shift_days</code></td>
 <td>LogNormal(median 14, sdlog 0.6)</td>
 <td>a shift or a variant’s rise over a few days to six weeks</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>variant_at</code></td>
 <td>Beta(1.5, 1.5)</td>
 <td>a new variant at any time, less often at the ends</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>escape</code></td>
 <td>Beta(2.4, 5.6)</td>
 <td>a variant returns about a tenth to a half of the immune</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>variant_r</code></td>
 <td>LogNormal(median 1.2, sdlog 0.1)</td>
 <td>a variant raises R by about x1 to x1.5</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>population</code></td>
 <td>LogNormal(median 200000, sdlog 1)</td>
 <td>places of about 30,000 to 1.5 million people</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>endemic_population</code></td>
 <td>LogNormal(median 1e+06, sdlog 1)</td>
 <td>endemic settings of about 150,000 to 7 million people</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>seed</code></td>
 <td>LogNormal(median 5, sdlog 0.7)</td>
 <td>an early outbreak seeded by a few infections</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>level</code></td>
 <td>LogNormal(median 30, sdlog 1.5)</td>
 <td>an established epidemic at about 2 to 500 infections a day</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>endemic_level</code></td>
 <td>LogNormal(median 300, sdlog 1)</td>
 <td>an endemic setting at about 40 to 2,000 infections a day</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>trickle</code></td>
 <td>LogNormal(median 0.05, sdlog 1)</td>
 <td>an import every few weeks to a few a week</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>gt_cv</code></td>
 <td>LogNormal(median 0.6, sdlog 0.4)</td>
 <td>generation-time CV of about 0.3 to 1.3</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>gt_mean</code></td>
 <td>LogNormal(median 7, sdlog 0.55)</td>
 <td>generation times of about 2 to 20 days</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>import_at</code></td>
 <td>Beta(2, 2)</td>
 <td>import pulses away from the ends</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><strong>Observation</strong></td>
 <td></td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>incubation_family</code></td>
 <td><code>gamma</code>, <code>lognormal</code></td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>observation</code></td>
 <td><code>negbin1d</code> (80%), <code>poisson</code> (20%)</td>
 <td></td>
 </tr>
+<tr class="odd">
+<td><code>ascertainment_change</code></td>
+<td><code>static</code> (50%), <code>drift</code> (10%), <code>step</code> (10%), <code>periodic</code> (10%), <code>smooth</code> (10%), <code>walk</code> (10%)</td>
+<td></td>
+</tr>
 <tr class="even">
+<td><code>ascertainment_change_switch</code></td>
+<td><code>none</code> (60%), <code>diverge</code> (20%), <code>converge</code> (20%)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><code>ascertainment_counts</code></td>
+<td><code>none</code> (50%), <code>shared</code> (17%), <code>strata</code> (17%), <code>strata_time</code> (17%)</td>
+<td></td>
+</tr>
+<tr class="even">
+<td><code>ascertainment_noise</code></td>
+<td><code>none</code> (50%), <code>time</code> (12%), <code>strata</code> (12%), <code>strata_time</code> (12%), <code>all</code> (12%)</td>
+<td></td>
+</tr>
+<tr class="odd">
 <td><code>sqrt_phi</code></td>
 <td>HalfNormal(0.25)</td>
 <td>NB1 dispersion with 95% of mass below 0.5</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>incubation_mean</code></td>
 <td>LogNormal(median 6, sdlog 0.65)</td>
 <td>infection to onset, test or admission, a mean of about 1.7 to 21 days. The reference values span it - cholera (median 1.4, Azman 2013) and influenza A (median 1.4, Lessler 2009), COVID-19 (means 3.5 to 6.5, Xu 2023), dengue (5.9, Chan 2012), Bundibugyo (6.3, MacNeil 2010), mpox (7.6 to 9.9), Ebola (9.1 to 11.4, WHO 2014), measles (median 12.5, Lessler 2009; mean 13.5) - and infection to admission of 10 to 15 days</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>incubation_cv</code></td>
 <td>LogNormal(median 0.5, sdlog 0.35)</td>
 <td>infection-to-reference CV of about 0.25 to 1, from narrow incubation periods to wide ones and delays to admission</td>
+</tr>
+<tr class="even">
+<td><code>ascertainment_drift</code></td>
+<td>LogNormal(median 0.5, sdlog 0.5)</td>
+<td>ascertainment’s log odds drift by 0.2 to 1.1 (5-95%) over the series, about x1.2 to x3 in the odds</td>
+</tr>
+<tr class="odd">
+<td><code>ascertainment_step</code></td>
+<td>LogNormal(median 0.5, sdlog 0.5)</td>
+<td>a step of 0.2 to 1.1 (5-95%) in ascertainment’s log odds, as a change in testing</td>
+</tr>
+<tr class="even">
+<td><code>ascertainment_periodic</code></td>
+<td>LogNormal(median 0.3, sdlog 0.5)</td>
+<td>a periodic change of 0.13 to 0.7 (5-95%) in ascertainment’s log odds</td>
+</tr>
+<tr class="odd">
+<td><code>ascertainment_smooth_amp</code></td>
+<td>LogNormal(median 0.3, sdlog 0.5)</td>
+<td>a smooth cycle of 0.13 to 0.7 (5-95%) in ascertainment’s log odds</td>
+</tr>
+<tr class="even">
+<td><code>ascertainment_walk_sd</code></td>
+<td>LogNormal(median 0.1, sdlog 0.4)</td>
+<td>a weekly walk of ascertainment’s log odds with steps of about 0.05 to 0.2</td>
+</tr>
+<tr class="odd">
+<td><code>ascertainment_counts_slope</code></td>
+<td>LogNormal(median 0.15, sdlog 0.5)</td>
+<td>ascertainment’s log odds move by 0.07 to 0.34 (5-95%) per unit of log expected counts, so tenfold counts change the odds by about x1.2 to x2.2</td>
+</tr>
+<tr class="even">
+<td><code>ascertainment_noise_sd</code></td>
+<td>LogNormal(median 0.15, sdlog 0.5)</td>
+<td>noise on ascertainment’s log odds of about 0.07 to 0.35 (5-95%) in each layer</td>
 </tr>
 <tr class="odd">
 <td><code>ascertainment</code></td>
@@ -901,6 +974,26 @@ Table&nbsp;2: The simulation grid, read from the grid config: by layer, each cat
 <tr class="odd">
 <td><code>delay_jitter</code></td>
 <td><code>no</code> (67%), <code>yes</code> (33%)</td>
+<td></td>
+</tr>
+<tr class="even">
+<td><code>delay_strata_noise</code></td>
+<td><code>none</code> (50%), <code>strata</code> (17%), <code>strata_time</code> (17%), <code>both</code> (17%)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><code>delay_change_switch</code></td>
+<td><code>none</code> (60%), <code>diverge</code> (20%), <code>converge</code> (20%)</td>
+<td></td>
+</tr>
+<tr class="even">
+<td><code>delay_change_combine</code></td>
+<td><code>single</code> (75%), <code>combined</code> (25%)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><code>delay_counts</code></td>
+<td><code>none</code> (50%), <code>shared</code> (17%), <code>strata</code> (17%), <code>strata_time</code> (17%)</td>
 <td></td>
 </tr>
 <tr class="even">
@@ -999,48 +1092,78 @@ Table&nbsp;2: The simulation grid, read from the grid config: by layer, each cat
 <td>week-to-week jitter of the delay’s parameters of about 4% to 23% (5-95%) on their log scale</td>
 </tr>
 <tr class="odd">
+<td><code>delay_strata_sd</code></td>
+<td>LogNormal(median 0.1, sdlog 0.5)</td>
+<td>each stratum’s static noise on the delay’s parameters of about 4% to 23% (5-95%) on their log scale, as the week-to-week jitter</td>
+</tr>
+<tr class="even">
+<td><code>delay_strata_jitter_sd</code></td>
+<td>LogNormal(median 0.07, sdlog 0.5)</td>
+<td>each stratum’s own week-to-week noise on the delay’s parameters of about 3% to 16% (5-95%) on their log scale</td>
+</tr>
+<tr class="odd">
+<td><code>delay_switch_at</code></td>
+<td>Beta(2, 2)</td>
+<td>strata’s delay changes diverge or converge away from the ends</td>
+</tr>
+<tr class="even">
+<td><code>delay_switch_days</code></td>
+<td>LogNormal(median 14, sdlog 0.6)</td>
+<td>strata’s delay changes diverge or converge over a few days to six weeks</td>
+</tr>
+<tr class="odd">
+<td><code>delay_counts_slope</code></td>
+<td>LogNormal(median 0.1, sdlog 0.6)</td>
+<td>the log delay moves by 0.04 to 0.27 (5-95%) per unit of log expected counts, so tenfold counts change the delay by about x1.1 to x1.9</td>
+</tr>
+<tr class="even">
 <td><code>delay_dow_sd</code></td>
 <td>LogNormal(median 0.1, sdlog 0.5)</td>
 <td>the mean delay by reference weekday within 4-23% (5-95%), spanning BDBV onsets (log mean delay by weekday sd 0.064) and German hospitalisations (median 0.108 over 36 series)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>Reporting system</strong></td>
 <td></td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>reference_dow</code></td>
 <td><code>no</code> (33%), <code>yes</code> (67%)</td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>report_dow</code></td>
 <td><code>no</code>, <code>yes</code></td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>report_days</code></td>
 <td><code>daily</code> (45%), <code>weekdays</code> (25%), <code>fixed_days</code> (15%), <code>weekly</code> (15%)</td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>shocks</code></td>
 <td><code>none</code> (50%), <code>backlog</code> (25%), <code>outage</code> (25%)</td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>revisions</code></td>
 <td><code>no</code> (70%), <code>yes</code> (30%)</td>
 <td></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>report_cap</code></td>
 <td><code>no</code> (75%), <code>yes</code> (25%)</td>
 <td></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>report_stop</code></td>
 <td><code>no</code> (90%), <code>yes</code> (10%)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td><code>bursts</code></td>
+<td><code>none</code> (95%), <code>yes</code> (5%)</td>
 <td></td>
 </tr>
 <tr class="even">
@@ -1080,8 +1203,18 @@ Table&nbsp;2: The simulation grid, read from the grid config: by layer, each cat
 </tr>
 <tr class="odd">
 <td><code>revise_over</code></td>
-<td>Beta(0.6, 19.4)</td>
-<td>a few percent of counts reported in error</td>
+<td>LogNormal(median 0.017, sdlog 1.5)</td>
+<td>a few percent of counts reported in error (0.1% to 20%, 5-95%), with a tail to 0.5 and beyond (1 in 80) where most of a release is in error</td>
+</tr>
+<tr class="even">
+<td><code>burst_at</code></td>
+<td>Beta(2, 2)</td>
+<td>over-reporting bursts away from the ends</td>
+</tr>
+<tr class="odd">
+<td><code>burst_mult</code></td>
+<td>LogNormal(median 3.2, sdlog 0.45)</td>
+<td>a burst’s first report at about 1.5 to 7 times the final count (5-95%), as Bremen’s 5 to 7</td>
 </tr>
 <tr class="even">
 <td><code>revise_move</code></td>
@@ -1131,7 +1264,7 @@ Figure&nbsp;1: Six contrasting simulations of the grid, from the development rou
 <img src="build/figures/si/sim-realism.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-sim-realism-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: The simulated outbreaks of the grid’s training rounds (grey histograms) against the German development half, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.
+Figure&nbsp;2: The simulated outbreaks of the grid’s training rounds (grey histograms) against the German development period, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.
 </figcaption>
 </figure>
 </div>
@@ -1359,7 +1492,7 @@ Figure&nbsp;3: The fine-tuning dashboard on 16 November 2026 at 17:29, with a ru
 </section>
 <section id="fine-tuning-on-real-data" class="level4">
 <h4 class="anchored" data-anchor-id="fine-tuning-on-real-data">Fine-tuning on real data</h4>
-<p>To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (<code>foundation_real</code>). It was trained on the German data and the BDBV data together. The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later. German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03. Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks. The hub file’s changes after 80 days hold revisions made up to August 2022, so they were left out. The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05). Daily blocks were cut at each daily release, and weekly blocks at each week from the hub’s public per-case delay table, for the country alone and with its provinces, at every release lag. Truth was the latest release’s counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old. Training followed Chronos-2’s recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps. The last 14 German nowcast dates were held out to monitor the loss.</p>
+<p>To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (<code>foundation_real</code>). It was trained on the German data and the BDBV data together. The German part used the data as available on 2022-02-09, the last day of the German development period, and nothing later. German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03. Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks. The hub file’s changes after 80 days hold revisions made up to August 2022, so they were left out. The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05). Daily blocks were cut at each daily release, and weekly blocks at each week from the hub’s public per-case delay table, for the country alone and with its provinces, at every release lag. Truth was the latest release’s counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old. Training followed Chronos-2’s recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps. The last 14 German nowcast dates were held out to monitor the loss.</p>
 </section>
 </section>
 <section id="baselines" class="level3">
@@ -1778,7 +1911,7 @@ Table&nbsp;6: The main priors of the renewal models.
 <li>We score Chronos-2’s trajectories with this copula, with every cell drawn independently, and with one level per trajectory across each series’ steps (comonotone), as bounds on the dependence.</li>
 <li>We score the random walk nowcast’s trajectories as submitted.</li>
 <li>We score trajectories by the energy score on counts and on <span class="math inline">\(\log(x + 1)\)</span> counts.</li>
-<li>We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.</li>
+<li>We score trajectories for the Ebola hub only, at the final held-out evaluation.</li>
 <li>Ebola trajectory scores use the same truth as every other Ebola score, with <span class="math inline">\(D\)</span> the 98% point of the hub data’s national reporting delay.</li>
 </ul>
 </div>
@@ -1825,7 +1958,7 @@ Table&nbsp;7: Choices tuned on development data, with their values and the data 
 <tr class="even">
 <td>Realism checks of the simulation grid</td>
 <td>Grid ranges</td>
-<td>German development half and published ranges for other diseases</td>
+<td>German development period and published ranges for other diseases</td>
 </tr>
 </tbody>
 </table>
@@ -1941,22 +2074,22 @@ Table&nbsp;8: Held-out synthetic data: mean scores, coverage and number of forec
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
-<td>10.6</td>
-<td>0.0955</td>
-<td>0.156</td>
-<td>0.498</td>
-<td>0.87</td>
+<td>10.9</td>
+<td>0.0956</td>
+<td>0.145</td>
+<td>0.494</td>
+<td>0.867</td>
 <td>1042</td>
-<td>0.669</td>
-<td>0.67</td>
-<td>0.266</td>
-<td>0.291</td>
-<td>0.112</td>
-<td>0.267</td>
+<td>0.686</td>
+<td>0.671</td>
+<td>0.274</td>
+<td>0.283</td>
+<td>0.129</td>
 <td>0.269</td>
-<td>0.135</td>
-<td>0.669</td>
-<td>0.67</td>
+<td>0.265</td>
+<td>0.137</td>
+<td>0.686</td>
+<td>0.671</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -1981,6 +2114,27 @@ Table&nbsp;8: Held-out synthetic data: mean scores, coverage and number of forec
 </tr>
 <tr class="odd">
 <td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>15.8</td>
+<td>0.138</td>
+<td>-0.046</td>
+<td>0.498</td>
+<td>0.873</td>
+<td>1042</td>
+<td>0.994</td>
+<td>0.972</td>
+<td>0.415</td>
+<td>0.331</td>
+<td>0.248</td>
+<td>0.39</td>
+<td>0.276</td>
+<td>0.305</td>
+<td>0.994</td>
+<td>0.972</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
 <td>Zero-shot (complete data)</td>
 <td>wis</td>
 <td>16.6</td>
@@ -2000,7 +2154,7 @@ Table&nbsp;8: Held-out synthetic data: mean scores, coverage and number of forec
 <td>1.05</td>
 <td>1.18</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>synthetic</td>
 <td>Random walk</td>
 <td>wis</td>
@@ -2021,7 +2175,7 @@ Table&nbsp;8: Held-out synthetic data: mean scores, coverage and number of forec
 <td>1.19</td>
 <td>1.11</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>synthetic</td>
 <td>Random walk nowcast</td>
 <td>wis</td>
@@ -2072,38 +2226,38 @@ Table&nbsp;9: Held-out synthetic data: mean energy score of each model’s traje
 <tr class="odd">
 <td>epinowcast</td>
 <td>142</td>
-<td>0.382</td>
-<td>0.657</td>
+<td>0.387</td>
+<td>0.665</td>
 </tr>
 <tr class="even">
 <td>Fine-tuned (reporting triangle), 1,000 outbreaks</td>
 <td>142</td>
-<td>0.513</td>
-<td>0.883</td>
+<td>0.522</td>
+<td>0.898</td>
 </tr>
 <tr class="odd">
 <td>Fine-tuned (reporting triangle), 16,000 outbreaks</td>
 <td>142</td>
-<td>0.47</td>
-<td>0.809</td>
+<td>0.432</td>
+<td>0.744</td>
 </tr>
 <tr class="even">
 <td>Fine-tuned (reporting triangle), 2,000 outbreaks</td>
 <td>142</td>
-<td>0.49</td>
-<td>0.844</td>
+<td>0.474</td>
+<td>0.816</td>
 </tr>
 <tr class="odd">
 <td>Fine-tuned (reporting triangle), 4,000 outbreaks</td>
 <td>142</td>
-<td>0.476</td>
-<td>0.818</td>
+<td>0.47</td>
+<td>0.808</td>
 </tr>
 <tr class="even">
 <td>Fine-tuned (reporting triangle), 8,000 outbreaks</td>
 <td>142</td>
-<td>0.452</td>
-<td>0.778</td>
+<td>0.447</td>
+<td>0.77</td>
 </tr>
 <tr class="odd">
 <td>Zero-shot (reporting triangle)</td>
@@ -2112,18 +2266,24 @@ Table&nbsp;9: Held-out synthetic data: mean energy score of each model’s traje
 <td>1.19</td>
 </tr>
 <tr class="even">
+<td>Zero-shot (baselinenowcast)</td>
+<td>142</td>
+<td>0.567</td>
+<td>0.976</td>
+</tr>
+<tr class="odd">
 <td>Zero-shot (complete data)</td>
 <td>142</td>
 <td>0.677</td>
 <td>1.16</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Random walk</td>
 <td>142</td>
 <td>0.652</td>
 <td>1.12</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Random walk nowcast</td>
 <td>142</td>
 <td>0.581</td>
@@ -2448,110 +2608,110 @@ Table&nbsp;11: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>epinowcast</td>
 <td>wis</td>
 <td>-28</td>
-<td>5.53</td>
-<td>0.0489</td>
-<td>0.18</td>
-<td>0.485</td>
-<td>0.811</td>
+<td>5.4</td>
+<td>0.0449</td>
+<td>0.255</td>
+<td>0.515</td>
+<td>0.841</td>
 <td>132</td>
-<td>0.92</td>
-<td>0.917</td>
-<td>0.266</td>
-<td>0.538</td>
-<td>0.116</td>
-<td>0.307</td>
-<td>0.434</td>
-<td>0.176</td>
-<td>0.92</td>
-<td>0.917</td>
+<td>0.899</td>
+<td>0.841</td>
+<td>0.289</td>
+<td>0.557</td>
+<td>0.0532</td>
+<td>0.317</td>
+<td>0.428</td>
+<td>0.0961</td>
+<td>0.899</td>
+<td>0.841</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>-21</td>
-<td>4.98</td>
-<td>0.0447</td>
-<td>0.177</td>
-<td>0.485</td>
-<td>0.897</td>
+<td>4.59</td>
+<td>0.0434</td>
+<td>0.0962</td>
+<td>0.493</td>
+<td>0.853</td>
 <td>136</td>
-<td>0.808</td>
-<td>0.737</td>
-<td>0.268</td>
-<td>0.43</td>
-<td>0.11</td>
+<td>0.744</td>
+<td>0.716</td>
+<td>0.279</td>
+<td>0.336</td>
+<td>0.13</td>
 <td>0.282</td>
-<td>0.327</td>
-<td>0.128</td>
-<td>0.808</td>
-<td>0.737</td>
+<td>0.264</td>
+<td>0.17</td>
+<td>0.744</td>
+<td>0.716</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>-14</td>
-<td>5.62</td>
-<td>0.0533</td>
-<td>0.269</td>
-<td>0.449</td>
-<td>0.804</td>
+<td>5.86</td>
+<td>0.0496</td>
+<td>0.251</td>
+<td>0.428</td>
+<td>0.855</td>
 <td>138</td>
-<td>0.863</td>
-<td>0.765</td>
-<td>0.277</td>
-<td>0.472</td>
-<td>0.113</td>
-<td>0.259</td>
-<td>0.417</td>
-<td>0.0892</td>
-<td>0.863</td>
-<td>0.765</td>
+<td>0.9</td>
+<td>0.712</td>
+<td>0.29</td>
+<td>0.526</td>
+<td>0.0836</td>
+<td>0.26</td>
+<td>0.364</td>
+<td>0.0875</td>
+<td>0.9</td>
+<td>0.712</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>-7</td>
-<td>6.21</td>
-<td>0.055</td>
-<td>0.188</td>
-<td>0.5</td>
-<td>0.877</td>
+<td>7.38</td>
+<td>0.0666</td>
+<td>0.273</td>
+<td>0.449</td>
+<td>0.819</td>
 <td>138</td>
-<td>0.765</td>
-<td>0.681</td>
-<td>0.274</td>
-<td>0.386</td>
-<td>0.105</td>
-<td>0.269</td>
-<td>0.309</td>
-<td>0.103</td>
-<td>0.765</td>
-<td>0.681</td>
+<td>0.909</td>
+<td>0.825</td>
+<td>0.292</td>
+<td>0.517</td>
+<td>0.1</td>
+<td>0.278</td>
+<td>0.439</td>
+<td>0.109</td>
+<td>0.909</td>
+<td>0.825</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>0</td>
-<td>10.5</td>
-<td>0.0984</td>
-<td>0.0816</td>
-<td>0.551</td>
-<td>0.831</td>
+<td>9.14</td>
+<td>0.0925</td>
+<td>0.0829</td>
+<td>0.574</td>
+<td>0.868</td>
 <td>136</td>
-<td>0.716</td>
-<td>0.707</td>
-<td>0.249</td>
-<td>0.281</td>
-<td>0.186</td>
-<td>0.26</td>
-<td>0.267</td>
-<td>0.18</td>
-<td>0.716</td>
-<td>0.707</td>
+<td>0.62</td>
+<td>0.664</td>
+<td>0.263</td>
+<td>0.208</td>
+<td>0.148</td>
+<td>0.264</td>
+<td>0.251</td>
+<td>0.149</td>
+<td>0.62</td>
+<td>0.664</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -2559,65 +2719,65 @@ Table&nbsp;11: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>wis</td>
 <td>7</td>
 <td>13.4</td>
-<td>0.125</td>
-<td>0.0944</td>
-<td>0.523</td>
+<td>0.127</td>
+<td>0.026</td>
+<td>0.508</td>
 <td>0.898</td>
 <td>128</td>
 <td>0.617</td>
-<td>0.641</td>
-<td>0.266</td>
-<td>0.249</td>
-<td>0.103</td>
-<td>0.27</td>
-<td>0.242</td>
-<td>0.13</td>
+<td>0.65</td>
+<td>0.274</td>
+<td>0.187</td>
+<td>0.155</td>
+<td>0.274</td>
+<td>0.194</td>
+<td>0.181</td>
 <td>0.617</td>
-<td>0.641</td>
+<td>0.65</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>14</td>
-<td>19.4</td>
-<td>0.175</td>
-<td>0.149</td>
-<td>0.421</td>
-<td>0.926</td>
+<td>21</td>
+<td>0.17</td>
+<td>0.0805</td>
+<td>0.479</td>
+<td>0.893</td>
 <td>121</td>
-<td>0.617</td>
-<td>0.652</td>
-<td>0.261</td>
-<td>0.247</td>
-<td>0.109</td>
-<td>0.257</td>
-<td>0.253</td>
-<td>0.142</td>
-<td>0.617</td>
-<td>0.652</td>
+<td>0.668</td>
+<td>0.63</td>
+<td>0.268</td>
+<td>0.26</td>
+<td>0.14</td>
+<td>0.259</td>
+<td>0.237</td>
+<td>0.134</td>
+<td>0.668</td>
+<td>0.63</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>wis</td>
 <td>21</td>
-<td>22.4</td>
-<td>0.19</td>
-<td>0.0915</td>
-<td>0.575</td>
-<td>0.938</td>
+<td>23.9</td>
+<td>0.199</td>
+<td>0.0673</td>
+<td>0.513</td>
+<td>0.92</td>
 <td>113</td>
-<td>0.586</td>
-<td>0.595</td>
-<td>0.273</td>
-<td>0.227</td>
-<td>0.0856</td>
-<td>0.267</td>
-<td>0.205</td>
-<td>0.123</td>
-<td>0.586</td>
-<td>0.595</td>
+<td>0.625</td>
+<td>0.624</td>
+<td>0.274</td>
+<td>0.228</td>
+<td>0.124</td>
+<td>0.266</td>
+<td>0.232</td>
+<td>0.126</td>
+<td>0.625</td>
+<td>0.624</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -2794,6 +2954,182 @@ Table&nbsp;11: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>0.45</td>
 <td>1.38</td>
 <td>1.18</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>-28</td>
+<td>6.12</td>
+<td>0.0612</td>
+<td>-0.132</td>
+<td>0.508</td>
+<td>0.795</td>
+<td>132</td>
+<td>1.02</td>
+<td>1.15</td>
+<td>0.341</td>
+<td>0.318</td>
+<td>0.36</td>
+<td>0.391</td>
+<td>0.273</td>
+<td>0.484</td>
+<td>1.02</td>
+<td>1.15</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>-21</td>
+<td>5.74</td>
+<td>0.0561</td>
+<td>-0.141</td>
+<td>0.493</td>
+<td>0.875</td>
+<td>136</td>
+<td>0.931</td>
+<td>0.924</td>
+<td>0.343</td>
+<td>0.218</td>
+<td>0.37</td>
+<td>0.361</td>
+<td>0.178</td>
+<td>0.385</td>
+<td>0.931</td>
+<td>0.924</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>-14</td>
+<td>6.76</td>
+<td>0.0626</td>
+<td>-0.0205</td>
+<td>0.493</td>
+<td>0.87</td>
+<td>138</td>
+<td>1.04</td>
+<td>0.899</td>
+<td>0.363</td>
+<td>0.298</td>
+<td>0.377</td>
+<td>0.338</td>
+<td>0.281</td>
+<td>0.279</td>
+<td>1.04</td>
+<td>0.899</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>-7</td>
+<td>7.95</td>
+<td>0.0721</td>
+<td>-0.0638</td>
+<td>0.493</td>
+<td>0.906</td>
+<td>138</td>
+<td>0.98</td>
+<td>0.893</td>
+<td>0.371</td>
+<td>0.286</td>
+<td>0.323</td>
+<td>0.367</td>
+<td>0.227</td>
+<td>0.298</td>
+<td>0.98</td>
+<td>0.893</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>0</td>
+<td>15.5</td>
+<td>0.144</td>
+<td>-0.0717</td>
+<td>0.485</td>
+<td>0.846</td>
+<td>136</td>
+<td>1.05</td>
+<td>1.03</td>
+<td>0.359</td>
+<td>0.301</td>
+<td>0.39</td>
+<td>0.374</td>
+<td>0.258</td>
+<td>0.399</td>
+<td>1.05</td>
+<td>1.03</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>7</td>
+<td>20.4</td>
+<td>0.187</td>
+<td>-0.0093</td>
+<td>0.508</td>
+<td>0.883</td>
+<td>128</td>
+<td>0.943</td>
+<td>0.961</td>
+<td>0.408</td>
+<td>0.32</td>
+<td>0.214</td>
+<td>0.404</td>
+<td>0.277</td>
+<td>0.28</td>
+<td>0.943</td>
+<td>0.961</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>14</td>
+<td>31.1</td>
+<td>0.269</td>
+<td>0.074</td>
+<td>0.463</td>
+<td>0.901</td>
+<td>121</td>
+<td>0.992</td>
+<td>0.998</td>
+<td>0.435</td>
+<td>0.356</td>
+<td>0.201</td>
+<td>0.393</td>
+<td>0.319</td>
+<td>0.286</td>
+<td>0.992</td>
+<td>0.998</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>21</td>
+<td>38.4</td>
+<td>0.301</td>
+<td>0.02</td>
+<td>0.549</td>
+<td>0.92</td>
+<td>113</td>
+<td>1.01</td>
+<td>0.945</td>
+<td>0.479</td>
+<td>0.371</td>
+<td>0.156</td>
+<td>0.415</td>
+<td>0.282</td>
+<td>0.248</td>
+<td>1.01</td>
+<td>0.945</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3390,22 +3726,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim01</td>
 <td>all</td>
-<td>10.4</td>
-<td>0.0706</td>
-<td>0.192</td>
-<td>0.578</td>
-<td>0.896</td>
+<td>12.6</td>
+<td>0.0862</td>
+<td>0.12</td>
+<td>0.504</td>
+<td>0.822</td>
 <td>135</td>
-<td>0.576</td>
-<td>0.546</td>
-<td>0.25</td>
-<td>0.24</td>
-<td>0.0864</td>
-<td>0.25</td>
-<td>0.223</td>
-<td>0.0735</td>
-<td>0.576</td>
-<td>0.546</td>
+<td>0.698</td>
+<td>0.667</td>
+<td>0.267</td>
+<td>0.292</td>
+<td>0.138</td>
+<td>0.259</td>
+<td>0.266</td>
+<td>0.141</td>
+<td>0.698</td>
+<td>0.667</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3413,22 +3749,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim02</td>
 <td>all</td>
-<td>6.28</td>
-<td>0.101</td>
-<td>-0.0326</td>
-<td>0.561</td>
-<td>0.911</td>
+<td>5.16</td>
+<td>0.0817</td>
+<td>0.0994</td>
+<td>0.553</td>
+<td>0.935</td>
 <td>123</td>
-<td>0.66</td>
-<td>0.673</td>
-<td>0.284</td>
-<td>0.234</td>
-<td>0.142</td>
-<td>0.293</td>
-<td>0.189</td>
-<td>0.191</td>
-<td>0.66</td>
-<td>0.673</td>
+<td>0.543</td>
+<td>0.542</td>
+<td>0.238</td>
+<td>0.223</td>
+<td>0.0817</td>
+<td>0.24</td>
+<td>0.206</td>
+<td>0.0959</td>
+<td>0.543</td>
+<td>0.542</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3436,22 +3772,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim03</td>
 <td>all</td>
-<td>18</td>
-<td>0.0862</td>
-<td>-0.00861</td>
-<td>0.472</td>
-<td>0.861</td>
+<td>19.6</td>
+<td>0.0908</td>
+<td>0.022</td>
+<td>0.491</td>
+<td>0.926</td>
 <td>108</td>
-<td>0.844</td>
-<td>0.851</td>
-<td>0.333</td>
-<td>0.267</td>
-<td>0.244</td>
-<td>0.32</td>
-<td>0.248</td>
-<td>0.283</td>
-<td>0.844</td>
-<td>0.851</td>
+<td>0.919</td>
+<td>0.897</td>
+<td>0.374</td>
+<td>0.311</td>
+<td>0.234</td>
+<td>0.362</td>
+<td>0.27</td>
+<td>0.265</td>
+<td>0.919</td>
+<td>0.897</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3459,22 +3795,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim04</td>
 <td>all</td>
-<td>10.2</td>
-<td>0.109</td>
-<td>0.452</td>
-<td>0.417</td>
-<td>0.795</td>
+<td>11.1</td>
+<td>0.116</td>
+<td>0.392</td>
+<td>0.409</td>
+<td>0.773</td>
 <td>132</td>
-<td>0.596</td>
-<td>0.689</td>
-<td>0.225</td>
+<td>0.65</td>
+<td>0.729</td>
+<td>0.249</td>
 <td>0.347</td>
-<td>0.0241</td>
-<td>0.243</td>
-<td>0.41</td>
-<td>0.036</td>
-<td>0.596</td>
-<td>0.689</td>
+<td>0.0539</td>
+<td>0.275</td>
+<td>0.391</td>
+<td>0.0631</td>
+<td>0.65</td>
+<td>0.729</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3482,22 +3818,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim05</td>
 <td>all</td>
-<td>3.24</td>
-<td>0.0976</td>
-<td>0.161</td>
-<td>0.591</td>
+<td>3.96</td>
+<td>0.107</td>
+<td>0.0485</td>
+<td>0.555</td>
 <td>0.891</td>
 <td>137</td>
-<td>0.396</td>
-<td>0.536</td>
-<td>0.177</td>
-<td>0.134</td>
-<td>0.0847</td>
+<td>0.484</td>
+<td>0.589</td>
+<td>0.202</td>
+<td>0.175</td>
+<td>0.108</td>
+<td>0.24</td>
 <td>0.226</td>
-<td>0.196</td>
-<td>0.114</td>
-<td>0.396</td>
-<td>0.536</td>
+<td>0.123</td>
+<td>0.484</td>
+<td>0.589</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3505,22 +3841,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim06</td>
 <td>all</td>
-<td>7.17</td>
-<td>0.109</td>
-<td>0.0313</td>
-<td>0.496</td>
-<td>0.927</td>
+<td>5.13</td>
+<td>0.0783</td>
+<td>0.0628</td>
+<td>0.518</td>
+<td>0.891</td>
 <td>137</td>
-<td>0.735</td>
-<td>0.759</td>
-<td>0.305</td>
-<td>0.259</td>
-<td>0.172</td>
-<td>0.298</td>
-<td>0.257</td>
-<td>0.204</td>
-<td>0.735</td>
-<td>0.759</td>
+<td>0.527</td>
+<td>0.543</td>
+<td>0.218</td>
+<td>0.18</td>
+<td>0.128</td>
+<td>0.229</td>
+<td>0.182</td>
+<td>0.132</td>
+<td>0.527</td>
+<td>0.543</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3528,22 +3864,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim07</td>
 <td>all</td>
-<td>10.2</td>
-<td>0.0888</td>
-<td>-0.0112</td>
-<td>0.486</td>
+<td>11.3</td>
+<td>0.101</td>
+<td>0.031</td>
+<td>0.558</td>
 <td>0.913</td>
 <td>138</td>
-<td>0.738</td>
-<td>0.762</td>
-<td>0.297</td>
-<td>0.259</td>
-<td>0.182</td>
-<td>0.316</td>
-<td>0.245</td>
-<td>0.201</td>
-<td>0.738</td>
-<td>0.762</td>
+<td>0.816</td>
+<td>0.865</td>
+<td>0.352</td>
+<td>0.229</td>
+<td>0.235</td>
+<td>0.377</td>
+<td>0.234</td>
+<td>0.254</td>
+<td>0.816</td>
+<td>0.865</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3551,22 +3887,22 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>wis</td>
 <td>s33300-sim08</td>
 <td>all</td>
-<td>20.9</td>
-<td>0.0996</td>
-<td>0.432</td>
-<td>0.379</td>
-<td>0.765</td>
+<td>19.9</td>
+<td>0.103</td>
+<td>0.369</td>
+<td>0.364</td>
+<td>0.795</td>
 <td>132</td>
-<td>0.689</td>
-<td>0.663</td>
-<td>0.252</td>
-<td>0.391</td>
-<td>0.0451</td>
-<td>0.234</td>
-<td>0.368</td>
-<td>0.0611</td>
-<td>0.689</td>
-<td>0.663</td>
+<td>0.657</td>
+<td>0.684</td>
+<td>0.249</td>
+<td>0.333</td>
+<td>0.0744</td>
+<td>0.239</td>
+<td>0.336</td>
+<td>0.109</td>
+<td>0.657</td>
+<td>0.684</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3751,6 +4087,190 @@ Table&nbsp;12: Held-out synthetic data scores by location and stratum. Illustrat
 <td>0.159</td>
 <td>1.54</td>
 <td>1.31</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim01</td>
+<td>all</td>
+<td>16.2</td>
+<td>0.105</td>
+<td>-0.0642</td>
+<td>0.585</td>
+<td>0.919</td>
+<td>135</td>
+<td>0.898</td>
+<td>0.814</td>
+<td>0.381</td>
+<td>0.296</td>
+<td>0.221</td>
+<td>0.369</td>
+<td>0.242</td>
+<td>0.203</td>
+<td>0.898</td>
+<td>0.814</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim02</td>
+<td>all</td>
+<td>10.5</td>
+<td>0.161</td>
+<td>-0.174</td>
+<td>0.455</td>
+<td>0.854</td>
+<td>123</td>
+<td>1.11</td>
+<td>1.07</td>
+<td>0.469</td>
+<td>0.362</td>
+<td>0.276</td>
+<td>0.431</td>
+<td>0.242</td>
+<td>0.397</td>
+<td>1.11</td>
+<td>1.07</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim03</td>
+<td>all</td>
+<td>29.4</td>
+<td>0.142</td>
+<td>-0.186</td>
+<td>0.435</td>
+<td>0.815</td>
+<td>108</td>
+<td>1.38</td>
+<td>1.4</td>
+<td>0.524</td>
+<td>0.355</td>
+<td>0.502</td>
+<td>0.48</td>
+<td>0.301</td>
+<td>0.617</td>
+<td>1.38</td>
+<td>1.4</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim04</td>
+<td>all</td>
+<td>12.4</td>
+<td>0.133</td>
+<td>0.186</td>
+<td>0.561</td>
+<td>0.879</td>
+<td>132</td>
+<td>0.727</td>
+<td>0.839</td>
+<td>0.337</td>
+<td>0.304</td>
+<td>0.0861</td>
+<td>0.358</td>
+<td>0.366</td>
+<td>0.114</td>
+<td>0.727</td>
+<td>0.839</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim05</td>
+<td>all</td>
+<td>4.57</td>
+<td>0.132</td>
+<td>-0.00599</td>
+<td>0.613</td>
+<td>0.898</td>
+<td>137</td>
+<td>0.56</td>
+<td>0.726</td>
+<td>0.253</td>
+<td>0.142</td>
+<td>0.164</td>
+<td>0.309</td>
+<td>0.177</td>
+<td>0.24</td>
+<td>0.56</td>
+<td>0.726</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim06</td>
+<td>all</td>
+<td>11.7</td>
+<td>0.168</td>
+<td>-0.133</td>
+<td>0.438</td>
+<td>0.869</td>
+<td>137</td>
+<td>1.2</td>
+<td>1.16</td>
+<td>0.484</td>
+<td>0.356</td>
+<td>0.357</td>
+<td>0.438</td>
+<td>0.294</td>
+<td>0.433</td>
+<td>1.2</td>
+<td>1.16</td>
+</tr>
+<tr class="odd">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim07</td>
+<td>all</td>
+<td>17</td>
+<td>0.141</td>
+<td>-0.173</td>
+<td>0.428</td>
+<td>0.862</td>
+<td>138</td>
+<td>1.23</td>
+<td>1.21</td>
+<td>0.467</td>
+<td>0.378</td>
+<td>0.38</td>
+<td>0.466</td>
+<td>0.296</td>
+<td>0.452</td>
+<td>1.23</td>
+<td>1.21</td>
+</tr>
+<tr class="even">
+<td>synthetic</td>
+<td>Zero-shot (baselinenowcast)</td>
+<td>wis</td>
+<td>s33300-sim08</td>
+<td>all</td>
+<td>27</td>
+<td>0.127</td>
+<td>0.157</td>
+<td>0.455</td>
+<td>0.879</td>
+<td>132</td>
+<td>0.892</td>
+<td>0.845</td>
+<td>0.399</td>
+<td>0.366</td>
+<td>0.127</td>
+<td>0.349</td>
+<td>0.319</td>
+<td>0.177</td>
+<td>0.892</td>
+<td>0.845</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -17117,7 +17637,7 @@ Table&nbsp;15: German nowcast hub scores by location and stratum.
 <li>They share the grid, the data order and the recipe, as checkpoints of one run.</li>
 <li><a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a> gives its progress over the checkpoints, in the panels every run’s progress figure has.</li>
 <li>Its loss panel gives the trainer’s training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.</li>
-<li>Its German panels give first-half relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.</li>
+<li>Its German panels give development-period relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.</li>
 <li>Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.</li>
 <li><a href="#tbl-checkpoints" class="quarto-xref">Table&nbsp;17</a> gives the headline scores of each checkpoint, and <a href="#tbl-live-summary" class="quarto-xref">Table&nbsp;16</a> the newest scored checkpoint against zero-shot Chronos-2.</li>
 <li>A later checkpoint has also trained for more steps.</li>
@@ -17136,7 +17656,7 @@ Figure&nbsp;17: Progress of the final run (<code>runa</code>) over its checkpoin
 <div id="tbl-live-summary" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;16: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss, with each cell’s simulations in brackets. <a href="#tbl-checkpoints" class="quarto-xref">Table&nbsp;17</a> gives every checkpoint. Fine-tuned checkpoint scores are not yet available. Development data only.
+Table&nbsp;16: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German development period, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss, with each cell’s simulations in brackets. <a href="#tbl-checkpoints" class="quarto-xref">Table&nbsp;17</a> gives every checkpoint. Fine-tuned checkpoint scores are not yet available. Development data only.
 </figcaption>
 <div aria-describedby="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on the scores of each checkpoint of the final run.</em></p>
@@ -17146,7 +17666,7 @@ Table&nbsp;16: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-
 <div id="tbl-checkpoints" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-checkpoints-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;17: Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss. Blank cells are not yet scored. Fine-tuned checkpoint scores are not yet available. Development data only.
+Table&nbsp;17: Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German development period, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss. Blank cells are not yet scored. Fine-tuned checkpoint scores are not yet available. Development data only.
 </figcaption>
 <div aria-describedby="tbl-checkpoints-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on the scores of each checkpoint of the final run.</em></p>
@@ -17190,9 +17710,9 @@ Figure&nbsp;19: German nowcast hub, daily counts: the score panels of the German
 <section id="real-data-fine-tune-against-synthetic" class="level3">
 <h3 class="anchored" data-anchor-id="real-data-fine-tune-against-synthetic">Real-data fine-tune against synthetic</h3>
 <ul>
-<li>We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.</li>
+<li>We fine-tune a model on the German development period and BDBV releases, and compare it with the model fine-tuned on simulations.</li>
 <li>Its BDBV training data are every release up to 2026-11-08, so we score it only on held-out Ebola rounds after that release.</li>
-<li>It saw the German development half, so we score it on the held-out half only.</li>
+<li>It saw the German development period, so we score it on the test period only.</li>
 <li>Both use the same recipe and the reporting-triangle layout.</li>
 <li><a href="#tbl-real-finetune" class="quarto-xref">Table&nbsp;18</a> gives the scores, and <a href="#fig-compare-realdata" class="quarto-xref">Figure&nbsp;20</a> shows them.</li>
 <li><a href="#fig-progress-realdata" class="quarto-xref">Figure&nbsp;21</a> gives the real-data run’s own progress, in the panels of <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a>.</li>
@@ -17221,7 +17741,7 @@ Figure&nbsp;21: Progress of the real-data run (<code>realdata</code>) over its c
 <div id="tbl-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;18: Chronos-2 zero-shot (<code>foundation_zeroshot</code>), fine-tuned on simulations (<code>foundation</code>) and fine-tuned on real data (<code>foundation_real</code>), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model’s last training release, relative to <code>randomwalknowcast</code>. Blank cells have no scores yet.
+Table&nbsp;18: Chronos-2 zero-shot (<code>foundation_zeroshot</code>), fine-tuned on simulations (<code>foundation</code>) and fine-tuned on real data (<code>foundation_real</code>), by level: WIS on the German test period and on held-out Ebola rounds after the real-data model’s last training release, relative to <code>randomwalknowcast</code>. Blank cells have no scores yet.
 </figcaption>
 <div aria-describedby="tbl-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top">
@@ -17240,14 +17760,14 @@ Table&nbsp;18: Chronos-2 zero-shot (<code>foundation_zeroshot</code>), fine-tune
 </figure>
 </div>
 </section>
-<section id="attention-biases-for-place-and-parent-against-none" class="level3">
-<h3 class="anchored" data-anchor-id="attention-biases-for-place-and-parent-against-none">Attention biases for place and parent against none</h3>
+<section id="attention-bias-setups" class="level3">
+<h3 class="anchored" data-anchor-id="attention-bias-setups">Attention bias setups</h3>
 <ul>
-<li>We compare the run with attention biases with a run without them.</li>
-<li>Both runs share the grid, the data order, the LoRA recipe and the checkpoints.</li>
-<li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;23</a> shows the trainer’s validation loss and German first-half relative scores of both runs by checkpoint and level.</li>
-<li><a href="#fig-progress-noslots" class="quarto-xref">Figure&nbsp;22</a> gives the run without biases’ own progress, as <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a> does for the run with them.</li>
-<li><a href="#tbl-slots-summary" class="quarto-xref">Table&nbsp;19</a> gives each run’s newest checkpoint.</li>
+<li>We compare four attention bias setups: all three biases (the main model), no biases, the same-place bias only, and the parent and child biases only.</li>
+<li>All four runs share the grid, the data order, the LoRA recipe and the checkpoints.</li>
+<li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;25</a> shows the trainer’s validation loss and German development-period relative scores of each run by checkpoint and level.</li>
+<li><a href="#fig-progress-noslots" class="quarto-xref">Figure&nbsp;22</a>, <a href="#fig-progress-sameonly" class="quarto-xref">Figure&nbsp;23</a> and <a href="#fig-progress-parentonly" class="quarto-xref">Figure&nbsp;24</a> give each other run’s own progress, as <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a> does for the main model.</li>
+<li><a href="#tbl-slots-summary" class="quarto-xref">Table&nbsp;19</a> gives each run’s scores at its final checkpoint.</li>
 <li>The lag-swap test moves whole lag series to another place.</li>
 <li>A ratio above 1 means the model’s forecast depends on which place’s lags sit with a target.</li>
 <li>Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.</li>
@@ -17263,20 +17783,40 @@ Figure&nbsp;22: Progress of the run without attention biases (<code>noslots</cod
 </figcaption>
 </figure>
 </div>
+<div id="fig-progress-sameonly" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-progress-sameonly-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/progress-sameonly.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-progress-sameonly-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;23: Progress of the run with the same-place bias only (<code>sameonly</code>) over its checkpoints, in the panels of <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a>. Development data only.
+</figcaption>
+</figure>
+</div>
+<div id="fig-progress-parentonly" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-progress-parentonly-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/progress-parentonly.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-progress-parentonly-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;24: Progress of the run with the parent and child biases only (<code>parentonly</code>) over its checkpoints, in the panels of <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a>. Development data only.
+</figcaption>
+</figure>
+</div>
 <div id="fig-compare-slots" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-compare-slots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="build/figures/si/compare-slots.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-slots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;23: Attention biases against none: the trainer’s validation loss and German first-half relative scores, by checkpoint and level. Fine-tuned checkpoint scores are not yet available. Development data only.
+Figure&nbsp;25: Attention bias setups: the trainer’s validation loss and German development-period relative scores, by checkpoint and level. Fine-tuned checkpoint scores are not yet available. Development data only.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-slots-summary" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;19: Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss, with each cell’s simulations in brackets. Fine-tuned checkpoint scores are not yet available. Development data only.
+Table&nbsp;19: Zero-shot Chronos-2 and the newest checkpoint of each attention bias setup: national WIS on the German development period, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s validation loss, with each cell’s simulations in brackets. Fine-tuned checkpoint scores are not yet available. Development data only.
 </figcaption>
 <div aria-describedby="tbl-slots-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on the slots and no-slots runs’ scores by checkpoint.</em></p>
@@ -17289,8 +17829,8 @@ Table&nbsp;19: Zero-shot Chronos-2 and the newest checkpoint of the runs with an
 <ul>
 <li>We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.</li>
 <li>Both runs share the grid, the data order, the recipe and the checkpoints.</li>
-<li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;24</a> shows both runs by checkpoint.</li>
-<li><a href="#fig-progress-nodelays" class="quarto-xref">Figure&nbsp;25</a> gives the no-delay run’s own progress.</li>
+<li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;26</a> shows both runs by checkpoint.</li>
+<li><a href="#fig-progress-nodelays" class="quarto-xref">Figure&nbsp;27</a> gives the no-delay run’s own progress.</li>
 <li>Without lag series the no-delay model has no counts after the last complete step, so its context ends there.</li>
 </ul>
 <div id="fig-compare-delays" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -17299,7 +17839,7 @@ Table&nbsp;19: Zero-shot Chronos-2 and the newest checkpoint of the runs with an
 <img src="build/figures/si/compare-delays.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;24: Delays against no delays: validation loss by source and German first-half relative scores, by checkpoint.
+Figure&nbsp;26: Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.
 </figcaption>
 </figure>
 </div>
@@ -17309,7 +17849,7 @@ Figure&nbsp;24: Delays against no delays: validation loss by source and German f
 <img src="build/figures/si/progress-nodelays.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-progress-nodelays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;25: Progress of the no-delay run (<code>nodelays</code>) over its checkpoints, in the panels of <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a>. Development data only.
+Figure&nbsp;27: Progress of the no-delay run (<code>nodelays</code>) over its checkpoints, in the panels of <a href="#fig-progress-runa" class="quarto-xref">Figure&nbsp;17</a>. Development data only.
 </figcaption>
 </figure>
 </div>
@@ -17317,9 +17857,9 @@ Figure&nbsp;25: Progress of the no-delay run (<code>nodelays</code>) over its ch
 <section id="impact-of-correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="impact-of-correlated-trajectories">Impact of correlated trajectories</h3>
 <ul>
-<li><a href="#fig-copula-impact" class="quarto-xref">Figure&nbsp;26</a> compares the rolling <span class="math inline">\(\rho_p\)</span> with no pairing on the German first half and the development simulations, at the national level and for provinces.</li>
+<li><a href="#fig-copula-impact" class="quarto-xref">Figure&nbsp;28</a> compares the rolling <span class="math inline">\(\rho_p\)</span> with no pairing on the Ebola hub, at the national level and for provinces.</li>
 <li>The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.</li>
-<li>The median rolling <span class="math inline">\(\rho_p\)</span> between German states over the first half’s nowcasts is (not yet available) for <code>randomwalknowcast</code> and (not yet available) for <code>randomwalk</code>, with (not yet available) and (not yet available) nowcasts falling back to the prior.</li>
+<li>The median rolling <span class="math inline">\(\rho_p\)</span> between provinces is (not yet available) for <code>randomwalknowcast</code> and (not yet available) for <code>randomwalk</code>, with (not yet available) and (not yet available) nowcasts falling back to the prior.</li>
 </ul>
 <div id="fig-copula-impact" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -17327,7 +17867,7 @@ Figure&nbsp;25: Progress of the no-delay run (<code>nodelays</code>) over its ch
 <img src="build/figures/si/copula-impact.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-copula-impact-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;26: Each score of <code>randomwalk</code> and <code>randomwalknowcast</code> with the rolling <span class="math inline">\(\rho_p\)</span> relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level’s places and weeks on the log scale. Development data only.
+Figure&nbsp;28: Each score of <code>randomwalk</code> and <code>randomwalknowcast</code> with the rolling <span class="math inline">\(\rho_p\)</span> relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level’s places and weeks on the log scale. Development data only.
 </figcaption>
 </figure>
 </div>
@@ -17472,6 +18012,9 @@ Vehtari, Aki, Andrew Gelman, Daniel Simpson, Bob Carpenter, and Paul-Christian B
 </div>
 <div id="ref-Wallinga2007" class="csl-entry" role="listitem">
 Wallinga, Jacco, and Marc Lipsitch. 2007. <span>“How Generation Intervals Shape the Relationship Between Growth Rates and Reproductive Numbers.”</span> <em>Proceedings of the Royal Society B: Biological Sciences</em> 274 (1609): 599–604. <a href="https://doi.org/10.1098/rspb.2006.3754">https://doi.org/10.1098/rspb.2006.3754</a>.
+</div>
+<div id="ref-Wolffram2023" class="csl-entry" role="listitem">
+Wolffram, Daniel, Sam Abbott, Matthias an der Heiden, Sebastian Funk, Felix Günther, Davide Hailer, Stefan Heyder, et al. 2023. <span>“Collaborative Nowcasting of COVID-19 Hospitalization Incidences in Germany.”</span> <em>PLOS Computational Biology</em> 19 (8): 1–25. <a href="https://doi.org/10.1371/journal.pcbi.1011394">https://doi.org/10.1371/journal.pcbi.1011394</a>.
 </div>
 <div id="ref-Woo2024" class="csl-entry" role="listitem">
 Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. 2024. <span>“Unified Training of Universal Time Series Forecasting Transformers.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2402.02592">https://doi.org/10.48550/arXiv.2402.02592</a>.
