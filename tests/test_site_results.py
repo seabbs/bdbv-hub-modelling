@@ -15,7 +15,7 @@ COMPUTE = (
     "nowcastgermany asof",
     "nowcastgermany paper",
     "bdbvhub report",
-    "nowcastgermany ft-load",
+    "nowcastgermany stored-load",
     "concat-results",
     "fit-store load",
 )

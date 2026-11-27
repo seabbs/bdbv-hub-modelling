@@ -21,7 +21,12 @@ names no release fails.
         --record OUT
     python -m paperpipe.stored promote --released RECORD --record OUT
         --branches BRANCH...
-    python -m paperpipe.stored fetch OUT_DIR --overlay OVERLAY
+    python -m paperpipe.stored fetch OUT_DIR --overlay OVERLAY [--set SET...]
+
+Site results fetches the `germany` set alone (`--set germany`): our
+German development forecasts from the fine-tuning workflow's units
+(`germany-units.csv.gz`, `nowcastgermany units`), so the site and the
+paper show the same ones.
 """
 
 from __future__ import annotations
@@ -47,6 +52,9 @@ from paperpipe.config import seed_of
 
 PREFIX = "paper-"
 """Every set's release tags start `paper-<set>-`."""
+
+SETS = ("synthetic", "finetune", "simulations", "germany")
+"""Every set, in the order `fetch` reads them."""
 
 ASSET = "paper-inputs.tar.gz"
 """Each release's one asset."""
@@ -79,9 +87,10 @@ and horizon_table). Stored as `progress/<run>/<file name>`; the BDBV check
 is left out, as it holds Ebola rows."""
 
 # The dates a German row is held out by, as the table guard reads them
-# (`paperpipe.config.check_no_heldout`): a development origin's targets
-# may run past the split.
-DATE_COLUMNS = ("origin_date", "nowcast_date")
+# (`paperpipe.config.check_no_heldout`), and `origin` of
+# `nowcastgermany`'s own tables: a development origin's targets may run
+# past the split.
+DATE_COLUMNS = ("origin_date", "nowcast_date", "origin")
 
 
 def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
@@ -151,6 +160,15 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             # The German benchmark's development table, every model.
             "germany-forecasts.csv.gz": (
                 f"{config['germany']['results']}/paper-forecasts.csv.gz"
+            ),
+            # Our models' rows of it as the fine-tuning workflow's units
+            # made them, and the checkpoint they load, which Site results
+            # reads (`nowcastgermany units`).
+            "germany-units.csv.gz": (
+                f"{config['germany']['results']}/forecasts.csv.gz"
+            ),
+            "germany-units.json": (
+                f"{config['germany']['results']}/units.json"
             ),
         },
         "simulations": {
@@ -282,7 +300,7 @@ def fetch(
     out: Path,
     pointer: Callable[[str], Mapping[str, Any]],
     download: Callable[[str, Path], Path],
-    names: Sequence[str] = ("synthetic", "finetune", "simulations", "germany"),
+    names: Sequence[str] = SETS,
 ) -> dict[str, Any]:
     """Unpack each set's current release under `out`; return the overlay.
 
@@ -371,8 +389,8 @@ def promote(
     )
 
 
-def main(argv: Sequence[str]) -> int:
-    """Publish or promote one set, or fetch every set; return the exit code."""
+def parser() -> argparse.ArgumentParser:
+    """Return the command line's parser."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     pub = sub.add_parser("publish")
@@ -387,7 +405,19 @@ def main(argv: Sequence[str]) -> int:
     get = sub.add_parser("fetch")
     get.add_argument("out", type=Path)
     get.add_argument("--overlay", type=Path, required=True)
-    args = parser.parse_args(argv)
+    get.add_argument(
+        "--set",
+        action="append",
+        choices=SETS,
+        default=None,
+        help="Fetch this set only (repeat for more); every set by default.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str]) -> int:
+    """Publish or promote one set, or fetch sets; return the exit code."""
+    args = parser().parse_args(argv)
     if args.command == "publish":
         config = {"heldout": json.loads(args.heldout)}
         files = dict(entry.split("=", 1) for entry in args.file)
@@ -412,7 +442,7 @@ def main(argv: Sequence[str]) -> int:
         args.record.write_text(json.dumps(record) + "\n")
         return 0
     pointer = functools.partial(pointers.read, repo=_repo())
-    config = fetch(args.out, pointer, gh_download)
+    config = fetch(args.out, pointer, gh_download, args.set or SETS)
     args.overlay.parent.mkdir(parents=True, exist_ok=True)
     args.overlay.write_text(yaml.safe_dump(config, sort_keys=True))
     print(f"Overlay: {args.overlay}")

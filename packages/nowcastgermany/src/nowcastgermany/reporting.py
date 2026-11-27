@@ -13,8 +13,9 @@ the results are filtered to it, and the page refuses to write a nowcast
 date on or after it (`held_out_leaks`), which CI checks again on the built
 site (`germany-site-check`, `check_site`).
 The configured hidden models start switched off.
-The fine-tuned models' forecasts come from the store
-(`nowcastgermany.store`); the page names the checkpoint
+Our models' forecasts are the fine-tuning workflow's German units, as
+the paper's `paper-germany` release publishes them
+(`nowcastgermany.store`); the page names the release and the checkpoint
 shown (`germany-ft.md`).
 """
 
@@ -80,8 +81,8 @@ _BANDS: Final = dict(
 
 NOT_RUN = (
     "Not yet available: our models' German nowcasts and scores come from "
-    "the German benchmark (`task nowcastgermany:benchmark`), which the "
-    "site does not run, and none are stored for it yet.\n"
+    "the fine-tuning workflow's German units, as the paper's "
+    "`paper-germany` release publishes them, and none is published yet.\n"
 )
 """What a page says when the site results hold no German scores of ours."""
 
@@ -231,32 +232,28 @@ def held_out_leaks(paths: Iterable[Path], split_date: str) -> list[str]:
 
 
 def _ft_note(results: Path) -> str:
-    """Say which checkpoint's stored forecasts the fine-tuned model shows."""
-    path = results / "ft-checkpoint.json"
+    """Say which release and checkpoint our German forecasts come from."""
+    path = results / "units.json"
     if not path.exists():
         return ""
     meta = json.loads(path.read_text())
-    tag, pinned = meta["tag"], meta["pinned"]
-    models = " and ".join(f"`{m}`" for m in meta["models"])
-    if tag is None and meta.get("live_run"):
+    release = meta.get("release")
+    if release is None:
         return (
-            f"{models} are not shown: the German forecasts of the "
-            f"fine-tuning run (`{meta['live_run']}`) are not stored yet.\n"
-        )
-    if tag is None:
-        return (
-            f"{models} are not shown: the German forecasts of their "
-            f"checkpoint (`{pinned}`) are not stored yet.\n"
+            "Our models' German forecasts are not shown: no `paper-germany` "
+            "release of the paper's German inputs is published yet.\n"
         )
     note = (
-        f"{models} show the fine-tuned checkpoint [`{tag}`]"
-        f"({_RELEASES}/{tag}). Their forecasts are those the checkpoint "
-        "scoring run made, attached to its release, not rerun here."
+        "Our models' forecasts are those the fine-tuning workflow's German "
+        "units made, as the paper reads them from its release "
+        f"[`{release}`]({_RELEASES}/{release}), not rerun here."
     )
-    if meta.get("label"):
-        note = f"**{meta['label']}** " + note
-    elif pinned and tag != pinned:
-        note += f" The pinned checkpoint, `{pinned}`, is not stored yet."
+    checkpoint = meta.get("checkpoint")
+    if checkpoint:
+        note += (
+            " The fine-tuned models load the paper's checkpoint "
+            f"[`{checkpoint}`]({_RELEASES}/{checkpoint})."
+        )
     return note + "\n"
 
 

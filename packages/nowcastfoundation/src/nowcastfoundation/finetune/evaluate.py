@@ -12,7 +12,8 @@ On the CPU the one-pass evaluation splits its batches over
 `EVALUATE_WORKERS` worker processes (`evaluate_workers`, `Split`), each
 with its share of the job's threads and cores
 (`nowcastutils.workers.pooled`). The batches are those one process runs,
-so the results are the same however many workers run them. A worker
+so the results are the same however many workers run them, up to float
+rounding from the workers' torch thread counts. A worker
 exits when its coordinator does, which stops its workers on SIGTERM.
 """
 
@@ -600,8 +601,8 @@ def split_pass(
     `rows` are the held-out blocks `need`, scored with `adapter` on
     `device`. The batches are those one process runs (`plan`), the
     costliest (`block_cost`) given out first, so the entries are the same
-    however many workers run them. Each batch is reported as it is done
-    (`fs.report_batch`).
+    however many workers run them, up to float rounding. Each batch is
+    reported as it is done (`fs.report_batch`).
     """
     from chronos.chronos2.dataset import DatasetMode
 
