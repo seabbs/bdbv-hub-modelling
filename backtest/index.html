@@ -2350,6 +2350,11 @@
 <h1 id="backtest">Backtest<a class="headerlink" href="#backtest" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Forecasts made at past vintages, scored on what each later release reported.</p>
 <p>Fitted models' results come from the <a href="https://github.com/seabbs/bdbv-hub-modelling/tree/fit-store">fit store</a>, fitted at <a href="https://github.com/seabbs/bdbv-hub-modelling/commit/21a6db4119d298f5e195d10ca4a47603a60f66e0"><code>21a6db4</code></a>, <a href="https://github.com/seabbs/bdbv-hub-modelling/commit/522bc5b10084e7dce0b277e35aead24525589528"><code>522bc5b</code></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Fits not made for this code</p>
+<p>Not yet fitted for this build's code (<a href="https://github.com/seabbs/bdbv-hub-modelling/commit/522bc5b10084e7dce0b277e35aead24525589528"><code>522bc5b</code></a>): <code>foundation</code> at 2026-10-17 and 2026-10-24 and 2026-11-01 and 2026-11-08 and 2026-11-15 and 2026-11-22.
+Fits of older code are shown for <code>foundation</code> at 2026-10-17 and 2026-10-24 and 2026-11-01 and 2026-11-08 and 2026-11-15 and 2026-11-22.</p>
+</div>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
 <p>Scores on the complete weeks, or on what each later release reported, as picked (<a href="../methods/evaluation/#real-releases">how scoring works</a>, <a href="../methods/evaluation/#scores">metrics</a>).
 The models run here are scored on 1,000 draws per forecast (<code>[samples] backtest</code> in <code>packages/nowcastbdbv/config/backtest.toml</code>) and the stored fits on their 100 (<code>[forecast] n_samples</code>), with common random numbers. CRPS, log CRPS and the energy score use the fair estimators, so scores on different numbers of draws compare (<a href="../methods/evaluation/#scores">scores</a>).
@@ -2397,18 +2402,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">24.46</td>
-<td style="text-align: right;">3.99</td>
-<td style="text-align: right;">3.21</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">2.16</td>
+<td style="text-align: right;">1.95</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">3.83</td>
-<td style="text-align: right;">3.1</td>
+<td style="text-align: right;">2.16</td>
+<td style="text-align: right;">1.94</td>
 </tr>
 <tr>
 <td style="text-align: left;">randomwalk</td>
@@ -2511,18 +2516,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">1.4</td>
-<td style="text-align: right;">3.36</td>
-<td style="text-align: right;">1.75</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">2.15</td>
+<td style="text-align: right;">1.94</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">3.56</td>
-<td style="text-align: right;">1.66</td>
+<td style="text-align: right;">2.24</td>
+<td style="text-align: right;">1.93</td>
 </tr>
 <tr>
 <td style="text-align: left;">randomwalk</td>
@@ -2853,13 +2858,13 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
@@ -2873,17 +2878,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">randomwalk</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: right;">24.46</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">0.51</td>
 <td style="text-align: right;">0.4</td>
 <td style="text-align: right;">0.65</td>
 <td style="text-align: right;">-0.03</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.26</td>
-<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">0.51</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -2892,17 +2897,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">randomwalknowcast</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: right;">15.23</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">0.16</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.34</td>
 <td style="text-align: right;">0.4</td>
 <td style="text-align: right;">0.7</td>
 <td style="text-align: right;">0.26</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.16</td>
-<td style="text-align: right;">0.21</td>
+<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.34</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -2911,17 +2916,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewal</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: right;">14.03</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">0.14</td>
-<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">0.55</td>
 <td style="text-align: right;">0.9</td>
 <td style="text-align: right;">0.11</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.3</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -2930,17 +2935,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: right;">13.94</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">0.14</td>
-<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">0.55</td>
 <td style="text-align: right;">0.9</td>
 <td style="text-align: right;">0.08</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.15</td>
-<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.3</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -2949,17 +2954,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: right;">65.53</td>
-<td style="text-align: right;">97.48</td>
-<td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">52.88</td>
+<td style="text-align: right;">1.24</td>
+<td style="text-align: right;">1.23</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.3</td>
 <td style="text-align: right;">0.92</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.65</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">1.15</td>
+<td style="text-align: right;">1.14</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -2967,13 +2972,13 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
@@ -2987,17 +2992,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">randomwalk</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: right;">1.4</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">0.3</td>
-<td style="text-align: right;">0.57</td>
+<td style="text-align: right;">3.01</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">0.52</td>
 <td style="text-align: right;">0.9</td>
 <td style="text-align: right;">0.95</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.28</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.52</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -3006,17 +3011,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">randomwalknowcast</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: right;">1.05</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">0.22</td>
-<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">3.01</td>
+<td style="text-align: right;">0.35</td>
+<td style="text-align: right;">0.32</td>
 <td style="text-align: right;">0.93</td>
 <td style="text-align: right;">0.95</td>
 <td style="text-align: right;">0.04</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.21</td>
-<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.38</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -3025,17 +3030,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewal</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: right;">1.1</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.32</td>
 <td style="text-align: right;">0.93</td>
 <td style="text-align: right;">0.96</td>
 <td style="text-align: right;">0.07</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.21</td>
-<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.38</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -3044,17 +3049,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewalbvd</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: right;">0.88</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">3.01</td>
+<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">0.93</td>
 <td style="text-align: right;">0.97</td>
 <td style="text-align: right;">0.07</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.17</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.37</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -3063,17 +3068,17 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">renewalsp</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: right;">2.25</td>
-<td style="text-align: right;">4.71</td>
-<td style="text-align: right;">0.48</td>
-<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">3.01</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.34</td>
 <td style="text-align: right;">0.89</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: right;">0.12</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.49</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.77</td>
+<td style="text-align: right;">0.38</td>
 </tr>
 <tr>
 <td style="text-align: left;">foundation</td>
@@ -3309,18 +3314,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">15.23</td>
-<td style="text-align: right;">6.4</td>
-<td style="text-align: right;">4.9</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">3.47</td>
+<td style="text-align: right;">2.97</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">6.17</td>
-<td style="text-align: right;">4.69</td>
+<td style="text-align: right;">3.47</td>
+<td style="text-align: right;">2.94</td>
 </tr>
 <tr>
 <td style="text-align: left;">randomwalknowcast</td>
@@ -3423,18 +3428,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">1.05</td>
-<td style="text-align: right;">4.5</td>
-<td style="text-align: right;">2.8</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">2.88</td>
+<td style="text-align: right;">3.11</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">4.75</td>
-<td style="text-align: right;">2.28</td>
+<td style="text-align: right;">2.99</td>
+<td style="text-align: right;">2.64</td>
 </tr>
 <tr>
 <td style="text-align: left;">randomwalknowcast</td>
@@ -3765,18 +3770,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">14.03</td>
-<td style="text-align: right;">6.95</td>
-<td style="text-align: right;">5.48</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">3.77</td>
+<td style="text-align: right;">3.33</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">6.66</td>
-<td style="text-align: right;">5.25</td>
+<td style="text-align: right;">3.75</td>
+<td style="text-align: right;">3.29</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewal</td>
@@ -3879,18 +3884,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">1.1</td>
-<td style="text-align: right;">4.28</td>
-<td style="text-align: right;">2.8</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">2.74</td>
+<td style="text-align: right;">3.11</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">4.73</td>
-<td style="text-align: right;">2.28</td>
+<td style="text-align: right;">2.98</td>
+<td style="text-align: right;">2.64</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewal</td>
@@ -4221,18 +4226,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">13.94</td>
-<td style="text-align: right;">6.99</td>
-<td style="text-align: right;">5.48</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">3.79</td>
+<td style="text-align: right;">3.33</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">6.76</td>
-<td style="text-align: right;">5.29</td>
+<td style="text-align: right;">3.8</td>
+<td style="text-align: right;">3.31</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewalbvd</td>
@@ -4335,18 +4340,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">0.88</td>
-<td style="text-align: right;">5.35</td>
-<td style="text-align: right;">2.96</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">3.43</td>
+<td style="text-align: right;">3.28</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">5.84</td>
-<td style="text-align: right;">2.31</td>
+<td style="text-align: right;">3.67</td>
+<td style="text-align: right;">2.68</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewalbvd</td>
@@ -4677,18 +4682,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">65.53</td>
-<td style="text-align: right;">1.49</td>
-<td style="text-align: right;">1.34</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">1.54</td>
-<td style="text-align: right;">1.39</td>
+<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.87</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewalsp</td>
@@ -4791,18 +4796,18 @@ The <a href="../methods/evaluation/#energy-score">energy score</a> scores each s
 <td style="text-align: left;">provinces</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">520</td>
-<td style="text-align: right;">4.71</td>
+<td style="text-align: right;">3.01</td>
 <td style="text-align: right;">2.25</td>
-<td style="text-align: right;">2.09</td>
-<td style="text-align: right;">2.64</td>
-<td style="text-align: right;">0.38</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.64</td>
+<td style="text-align: right;">1.34</td>
+<td style="text-align: right;">2.93</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">520</td>
 <td style="text-align: left;">False</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">2.06</td>
-<td style="text-align: right;">2.24</td>
+<td style="text-align: right;">1.29</td>
+<td style="text-align: right;">2.6</td>
 </tr>
 <tr>
 <td style="text-align: left;">renewalsp</td>
@@ -5202,13 +5207,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">97.48</td>
+<td style="text-align: right;">52.88</td>
 <td style="text-align: right;">15.23</td>
-<td style="text-align: right;">6.4</td>
-<td style="text-align: right;">4.9</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">3.47</td>
+<td style="text-align: right;">2.97</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">0.24</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5302,9 +5307,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5394,13 +5399,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.77</td>
 <td style="text-align: right;">0.35</td>
-<td style="text-align: right;">2.47</td>
-<td style="text-align: right;">2.22</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">1.95</td>
+<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5493,10 +5498,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">2.73923e+10</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5509,7 +5514,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">4.67579e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5525,7 +5530,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5541,7 +5546,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.01804e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5557,7 +5562,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.82526e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5573,7 +5578,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">1.60151e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5589,10 +5594,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">2.73116e+10</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5605,7 +5610,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5621,7 +5626,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5637,7 +5642,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">1.77588e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -5653,7 +5658,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">1.25119e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -5669,7 +5674,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.59377e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5685,10 +5690,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">2.74322e+10</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5701,7 +5706,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">4.03608e+13</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5717,7 +5722,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -5733,7 +5738,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">8.47577e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -5749,7 +5754,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">3.22887e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5765,7 +5770,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">3.22887e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -5778,13 +5783,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">5.14</td>
+<td style="text-align: right;">6.43</td>
 <td style="text-align: right;">0.95</td>
-<td style="text-align: right;">5.42</td>
-<td style="text-align: right;">5.24</td>
+<td style="text-align: right;">6.78</td>
+<td style="text-align: right;">8.92</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.13</td>
+<td style="text-align: right;">-0.18</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5874,13 +5879,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">47.14</td>
+<td style="text-align: right;">31.72</td>
 <td style="text-align: right;">8.42</td>
-<td style="text-align: right;">5.6</td>
-<td style="text-align: right;">4.82</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">3.77</td>
+<td style="text-align: right;">3.61</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0.06</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -5974,9 +5979,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.76</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6070,9 +6075,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.9</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6165,10 +6170,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6197,7 +6202,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6213,7 +6218,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6229,7 +6234,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">4</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -6245,7 +6250,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6262,9 +6267,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6358,9 +6363,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6454,9 +6459,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6550,9 +6555,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6645,10 +6650,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6677,7 +6682,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6693,7 +6698,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">6</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -6709,7 +6714,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">7</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -6725,7 +6730,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">3</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6742,9 +6747,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6838,9 +6843,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6933,10 +6938,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">2.72939e+10</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -6949,7 +6954,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6965,7 +6970,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -6981,7 +6986,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.70418e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -6997,7 +7002,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.50237e+15</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -7013,7 +7018,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">6.5949e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -7026,13 +7031,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">65.4</td>
+<td style="text-align: right;">34.16</td>
 <td style="text-align: right;">15.4</td>
-<td style="text-align: right;">4.25</td>
-<td style="text-align: right;">2.79</td>
-<td style="text-align: right;">0.1</td>
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">2.22</td>
+<td style="text-align: right;">1.71</td>
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.2</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7122,13 +7127,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.47</td>
 <td style="text-align: right;">0.2</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">2.22</td>
-<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">2.31</td>
+<td style="text-align: right;">2.32</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.44</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7222,9 +7227,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
+<td style="text-align: right;">0.3</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7314,13 +7319,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0.03</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.2</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7410,13 +7415,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">0.23</td>
-<td style="text-align: right;">2.37</td>
-<td style="text-align: right;">2.72</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">2.44</td>
+<td style="text-align: right;">2.82</td>
 <td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">0.16</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7509,10 +7514,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7525,7 +7530,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -7557,7 +7562,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -7573,7 +7578,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -7589,7 +7594,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -7602,13 +7607,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">2.82</td>
+<td style="text-align: right;">4.19</td>
 <td style="text-align: right;">1.62</td>
-<td style="text-align: right;">1.74</td>
-<td style="text-align: right;">3.04</td>
-<td style="text-align: right;">0.55</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">-0.15</td>
+<td style="text-align: right;">2.58</td>
+<td style="text-align: right;">5.81</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.5</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -7702,9 +7707,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.35</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.76</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14029,13 +14034,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">158.8</td>
+<td style="text-align: right;">59.35</td>
 <td style="text-align: right;">22.02</td>
-<td style="text-align: right;">7.21</td>
-<td style="text-align: right;">5.06</td>
-<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">2.7</td>
+<td style="text-align: right;">2.17</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.29</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14125,13 +14130,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">124.86</td>
+<td style="text-align: right;">84.4</td>
 <td style="text-align: right;">13.37</td>
-<td style="text-align: right;">9.34</td>
-<td style="text-align: right;">6.77</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">6.31</td>
+<td style="text-align: right;">4.83</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14221,13 +14226,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">52.95</td>
+<td style="text-align: right;">33.19</td>
 <td style="text-align: right;">13.62</td>
-<td style="text-align: right;">3.89</td>
-<td style="text-align: right;">3.57</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">2.44</td>
+<td style="text-align: right;">2.5</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14317,13 +14322,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-08</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">33.62</td>
+<td style="text-align: right;">31.94</td>
 <td style="text-align: right;">14.08</td>
-<td style="text-align: right;">2.39</td>
-<td style="text-align: right;">2.34</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">2.46</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">-0.25</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14413,13 +14418,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">29.87</td>
+<td style="text-align: right;">25.5</td>
 <td style="text-align: right;">4.42</td>
-<td style="text-align: right;">6.76</td>
-<td style="text-align: right;">6.27</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">5.77</td>
+<td style="text-align: right;">5.54</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14509,13 +14514,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-17</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">156</td>
-<td style="text-align: right;">4.98</td>
+<td style="text-align: right;">3.28</td>
 <td style="text-align: right;">2.1</td>
-<td style="text-align: right;">2.38</td>
-<td style="text-align: right;">1.97</td>
-<td style="text-align: right;">0.42</td>
-<td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">1.56</td>
+<td style="text-align: right;">2.33</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">156</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14605,13 +14610,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">130</td>
-<td style="text-align: right;">6.23</td>
+<td style="text-align: right;">3.94</td>
 <td style="text-align: right;">0.9</td>
-<td style="text-align: right;">6.96</td>
-<td style="text-align: right;">2.18</td>
-<td style="text-align: right;">0.24</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">4.41</td>
+<td style="text-align: right;">2.22</td>
+<td style="text-align: right;">0.12</td>
+<td style="text-align: right;">0.98</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">130</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14701,13 +14706,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">104</td>
-<td style="text-align: right;">3.8</td>
+<td style="text-align: right;">2.18</td>
 <td style="text-align: right;">0.57</td>
-<td style="text-align: right;">6.68</td>
-<td style="text-align: right;">3.88</td>
-<td style="text-align: right;">0.12</td>
-<td style="text-align: right;">0.96</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">3.82</td>
+<td style="text-align: right;">4.01</td>
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.54</td>
 <td style="text-align: right;">104</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14797,13 +14802,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-08</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">78</td>
-<td style="text-align: right;">3.7</td>
+<td style="text-align: right;">2.55</td>
 <td style="text-align: right;">0.45</td>
-<td style="text-align: right;">8.3</td>
-<td style="text-align: right;">4.69</td>
-<td style="text-align: right;">0.63</td>
+<td style="text-align: right;">5.71</td>
+<td style="text-align: right;">5.64</td>
+<td style="text-align: right;">0.62</td>
 <td style="text-align: right;">0.97</td>
-<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.39</td>
 <td style="text-align: right;">78</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -14893,13 +14898,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">52</td>
-<td style="text-align: right;">3.4</td>
+<td style="text-align: right;">2.27</td>
 <td style="text-align: right;">0.12</td>
-<td style="text-align: right;">27.72</td>
-<td style="text-align: right;">80</td>
-<td style="text-align: right;">0.79</td>
-<td style="text-align: right;">0.96</td>
-<td style="text-align: right;">0.61</td>
+<td style="text-align: right;">18.5</td>
+<td style="text-align: right;">91.56</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.53</td>
 <td style="text-align: right;">52</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -15974,13 +15979,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">158.8</td>
+<td style="text-align: right;">59.35</td>
 <td style="text-align: right;">22.02</td>
-<td style="text-align: right;">7.21</td>
-<td style="text-align: right;">5.06</td>
-<td style="text-align: right;">0.17</td>
+<td style="text-align: right;">2.7</td>
+<td style="text-align: right;">2.17</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.69</td>
+<td style="text-align: right;">0.29</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16074,9 +16079,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16166,13 +16171,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.69</td>
 <td style="text-align: right;">0.38</td>
-<td style="text-align: right;">2.03</td>
-<td style="text-align: right;">1.8</td>
+<td style="text-align: right;">1.83</td>
+<td style="text-align: right;">1.64</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.13</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16266,9 +16271,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16361,10 +16366,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16377,7 +16382,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -16409,7 +16414,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -16425,7 +16430,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -16441,7 +16446,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -16458,9 +16463,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16550,13 +16555,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">5.84</td>
+<td style="text-align: right;">7.63</td>
 <td style="text-align: right;">1.84</td>
-<td style="text-align: right;">3.17</td>
-<td style="text-align: right;">2.9</td>
+<td style="text-align: right;">4.14</td>
+<td style="text-align: right;">5.1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">-0.06</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16646,13 +16651,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">58.08</td>
+<td style="text-align: right;">34.32</td>
 <td style="text-align: right;">16.76</td>
-<td style="text-align: right;">3.47</td>
-<td style="text-align: right;">2.78</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">2.05</td>
+<td style="text-align: right;">2.1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.01</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16746,9 +16751,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16842,9 +16847,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -16938,9 +16943,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17034,9 +17039,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17130,9 +17135,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17226,9 +17231,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17322,9 +17327,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17418,9 +17423,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17433,7 +17438,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -17514,9 +17519,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17610,9 +17615,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17705,10 +17710,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17721,7 +17726,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -17753,7 +17758,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -17769,7 +17774,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -17785,7 +17790,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -17798,13 +17803,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">59.92</td>
+<td style="text-align: right;">36.21</td>
 <td style="text-align: right;">33.16</td>
-<td style="text-align: right;">1.81</td>
-<td style="text-align: right;">1.12</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">1.09</td>
+<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.35</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17898,9 +17903,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">0.83</td>
-<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.52</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -17994,9 +17999,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18086,13 +18091,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0.05</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.81</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18186,9 +18191,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.3</td>
 <td style="text-align: right;">1.66</td>
 <td style="text-align: right;">1.82</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">0.21</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18282,9 +18287,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18374,13 +18379,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">3.98</td>
+<td style="text-align: right;">5.46</td>
 <td style="text-align: right;">1.72</td>
-<td style="text-align: right;">2.31</td>
-<td style="text-align: right;">5.13</td>
+<td style="text-align: right;">3.17</td>
+<td style="text-align: right;">8.94</td>
 <td style="text-align: right;">0.17</td>
-<td style="text-align: right;">0.83</td>
-<td style="text-align: right;">-0.67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-0.74</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18474,9 +18479,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.76</td>
+<td style="text-align: right;">0.82</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18566,13 +18571,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">124.86</td>
+<td style="text-align: right;">84.4</td>
 <td style="text-align: right;">13.37</td>
-<td style="text-align: right;">9.34</td>
-<td style="text-align: right;">6.77</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">6.31</td>
+<td style="text-align: right;">4.83</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">0.65</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18666,9 +18671,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18758,13 +18763,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">0.68</td>
 <td style="text-align: right;">0.49</td>
-<td style="text-align: right;">1.64</td>
-<td style="text-align: right;">1.55</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">1.39</td>
+<td style="text-align: right;">1.34</td>
+<td style="text-align: right;">0.4</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">-0.01</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18858,9 +18863,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18954,9 +18959,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -18969,7 +18974,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -19050,9 +19055,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19142,13 +19147,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">4.73</td>
+<td style="text-align: right;">6.73</td>
 <td style="text-align: right;">0.71</td>
-<td style="text-align: right;">6.7</td>
-<td style="text-align: right;">7.09</td>
+<td style="text-align: right;">9.52</td>
+<td style="text-align: right;">13.88</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.02</td>
+<td style="text-align: right;">-0.29</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19238,13 +19243,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">71.4</td>
+<td style="text-align: right;">43.57</td>
 <td style="text-align: right;">6.18</td>
-<td style="text-align: right;">11.56</td>
-<td style="text-align: right;">8.44</td>
+<td style="text-align: right;">7.05</td>
+<td style="text-align: right;">5.5</td>
 <td style="text-align: right;">0.4</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.55</td>
+<td style="text-align: right;">0.47</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19338,9 +19343,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19434,9 +19439,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19530,9 +19535,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19545,7 +19550,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -19626,9 +19631,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19705,7 +19710,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -19722,9 +19727,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19737,7 +19742,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -19818,9 +19823,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -19914,9 +19919,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20009,10 +20014,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20041,7 +20046,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -20057,7 +20062,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">2</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -20073,7 +20078,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">2</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -20106,9 +20111,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20202,9 +20207,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20298,9 +20303,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20390,13 +20395,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">82</td>
+<td style="text-align: right;">47.46</td>
 <td style="text-align: right;">13.21</td>
-<td style="text-align: right;">6.21</td>
-<td style="text-align: right;">4.44</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">3.59</td>
+<td style="text-align: right;">2.78</td>
 <td style="text-align: right;">0.4</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.62</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20490,9 +20495,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.4</td>
 <td style="text-align: right;">1.01</td>
 <td style="text-align: right;">1.01</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">0.45</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20586,9 +20591,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20678,13 +20683,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.03</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.4</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.87</td>
+<td style="text-align: right;">0.79</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20778,9 +20783,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0.35</td>
 <td style="text-align: right;">1.73</td>
 <td style="text-align: right;">1.94</td>
-<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">0.6</td>
-<td style="text-align: right;">0.08</td>
+<td style="text-align: right;">0.1</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20874,9 +20879,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.83</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -20966,13 +20971,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">2.07</td>
+<td style="text-align: right;">3.07</td>
 <td style="text-align: right;">1.96</td>
-<td style="text-align: right;">1.06</td>
-<td style="text-align: right;">1.82</td>
+<td style="text-align: right;">1.57</td>
+<td style="text-align: right;">2.97</td>
 <td style="text-align: right;">0.6</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.14</td>
+<td style="text-align: right;">-0.29</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21066,9 +21071,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.8</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">5</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21158,13 +21163,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">52.95</td>
+<td style="text-align: right;">33.19</td>
 <td style="text-align: right;">13.62</td>
-<td style="text-align: right;">3.89</td>
-<td style="text-align: right;">3.57</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">2.44</td>
+<td style="text-align: right;">2.5</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.38</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21258,9 +21263,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21350,13 +21355,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.78</td>
 <td style="text-align: right;">0.39</td>
-<td style="text-align: right;">2.23</td>
-<td style="text-align: right;">1.68</td>
+<td style="text-align: right;">2.01</td>
+<td style="text-align: right;">1.53</td>
 <td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.18</td>
+<td style="text-align: right;">-0</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21449,10 +21454,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21465,7 +21470,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -21497,7 +21502,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -21513,7 +21518,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -21529,7 +21534,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -21546,9 +21551,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21641,10 +21646,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">3.72416e+09</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21657,7 +21662,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -21673,7 +21678,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -21689,7 +21694,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">2.42165e+14</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.02</td>
@@ -21705,7 +21710,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">4.03608e+13</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -21721,7 +21726,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;">4.03608e+13</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -21734,13 +21739,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">5.25</td>
+<td style="text-align: right;">5.98</td>
 <td style="text-align: right;">0.56</td>
-<td style="text-align: right;">9.42</td>
-<td style="text-align: right;">8.55</td>
+<td style="text-align: right;">10.73</td>
+<td style="text-align: right;">14.34</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">-0.31</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21830,13 +21835,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">32.8</td>
+<td style="text-align: right;">23.94</td>
 <td style="text-align: right;">6.58</td>
-<td style="text-align: right;">4.99</td>
-<td style="text-align: right;">5.15</td>
+<td style="text-align: right;">3.64</td>
+<td style="text-align: right;">3.51</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.12</td>
+<td style="text-align: right;">-0.04</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21930,9 +21935,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.76</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -21945,7 +21950,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -22026,9 +22031,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">1</td>
 <td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.88</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22121,10 +22126,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22137,7 +22142,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -22169,7 +22174,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -22185,7 +22190,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -22201,7 +22206,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -22218,9 +22223,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22314,9 +22319,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22410,9 +22415,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22506,9 +22511,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22602,9 +22607,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22681,7 +22686,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -22698,9 +22703,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22794,9 +22799,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22890,9 +22895,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -22905,7 +22910,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -22982,13 +22987,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">56.28</td>
+<td style="text-align: right;">21.22</td>
 <td style="text-align: right;">5.91</td>
-<td style="text-align: right;">9.53</td>
-<td style="text-align: right;">8.8</td>
-<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">3.59</td>
+<td style="text-align: right;">4.57</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">-0.12</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23178,9 +23183,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23270,13 +23275,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.02</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.81</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23372,7 +23377,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">4.01</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.5</td>
-<td style="text-align: right;">-0.07</td>
+<td style="text-align: right;">-0.06</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23465,10 +23470,10 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23481,7 +23486,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -23513,7 +23518,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -23529,7 +23534,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">inf</td>
+<td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0.01</td>
@@ -23545,7 +23550,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -23558,13 +23563,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">2.41</td>
+<td style="text-align: right;">3.36</td>
 <td style="text-align: right;">1.08</td>
-<td style="text-align: right;">2.23</td>
-<td style="text-align: right;">3.5</td>
-<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">3.11</td>
+<td style="text-align: right;">5.89</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.16</td>
+<td style="text-align: right;">-0.24</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23658,9 +23663,9 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">0.75</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23750,13 +23755,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">33.62</td>
+<td style="text-align: right;">31.94</td>
 <td style="text-align: right;">14.08</td>
-<td style="text-align: right;">2.39</td>
-<td style="text-align: right;">2.34</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">2.46</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">-0.25</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23852,7 +23857,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -23942,13 +23947,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.81</td>
 <td style="text-align: right;">0.26</td>
-<td style="text-align: right;">3.74</td>
-<td style="text-align: right;">2.88</td>
+<td style="text-align: right;">3.1</td>
+<td style="text-align: right;">2.41</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.41</td>
+<td style="text-align: right;">0.29</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24044,7 +24049,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24140,7 +24145,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24217,7 +24222,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
+<td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">0</td>
@@ -24236,7 +24241,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24326,13 +24331,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">5.21</td>
+<td style="text-align: right;">5.41</td>
 <td style="text-align: right;">0.63</td>
-<td style="text-align: right;">8.26</td>
-<td style="text-align: right;">7.04</td>
+<td style="text-align: right;">8.57</td>
+<td style="text-align: right;">8.97</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">0.01</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24422,13 +24427,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">24.73</td>
+<td style="text-align: right;">23.86</td>
 <td style="text-align: right;">2.47</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">11.48</td>
+<td style="text-align: right;">9.65</td>
+<td style="text-align: right;">10.8</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.15</td>
+<td style="text-align: right;">-0.21</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24524,7 +24529,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24620,7 +24625,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24716,7 +24721,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24812,7 +24817,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -24908,7 +24913,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25004,7 +25009,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25100,7 +25105,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25196,7 +25201,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25292,7 +25297,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25388,7 +25393,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25484,7 +25489,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25574,13 +25579,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">61.64</td>
+<td style="text-align: right;">29.6</td>
 <td style="text-align: right;">5.54</td>
-<td style="text-align: right;">11.12</td>
-<td style="text-align: right;">9.23</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">5.34</td>
+<td style="text-align: right;">7.03</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.61</td>
+<td style="text-align: right;">-0.47</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25676,7 +25681,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">33.71</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.08</td>
+<td style="text-align: right;">0.06</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25772,7 +25777,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25862,13 +25867,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.02</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.33</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.74</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -25964,7 +25969,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">26.61</td>
 <td style="text-align: right;">0.33</td>
 <td style="text-align: right;">0.67</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">0.07</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26060,7 +26065,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26150,13 +26155,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">5.2</td>
 <td style="text-align: right;">2.65</td>
-<td style="text-align: right;">0.86</td>
-<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">1.96</td>
+<td style="text-align: right;">3.92</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.14</td>
+<td style="text-align: right;">-0.71</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26252,7 +26257,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0.67</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.59</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26342,13 +26347,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">29.87</td>
+<td style="text-align: right;">25.5</td>
 <td style="text-align: right;">4.42</td>
-<td style="text-align: right;">6.76</td>
-<td style="text-align: right;">6.27</td>
-<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">5.77</td>
+<td style="text-align: right;">5.54</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.08</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26534,13 +26539,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-BU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">1.21</td>
+<td style="text-align: right;">1.14</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0</td>
-<td style="text-align: right;">0.5</td>
-<td style="text-align: right;">0.94</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.87</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26828,7 +26833,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -26918,13 +26923,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-HU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">3.69</td>
+<td style="text-align: right;">4.47</td>
 <td style="text-align: right;">0.11</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">-0.26</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27014,13 +27019,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-IT</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">15.97</td>
+<td style="text-align: right;">21.63</td>
 <td style="text-align: right;">1.63</td>
-<td style="text-align: right;">9.79</td>
-<td style="text-align: right;">9.38</td>
+<td style="text-align: right;">13.26</td>
+<td style="text-align: right;">12.14</td>
+<td style="text-align: right;">0.5</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">-0.08</td>
+<td style="text-align: right;">-0.19</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27116,7 +27121,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27212,7 +27217,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27500,7 +27505,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27596,7 +27601,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27692,7 +27697,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27788,7 +27793,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -27980,7 +27985,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28076,7 +28081,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28166,13 +28171,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">64.23</td>
+<td style="text-align: right;">27.52</td>
 <td style="text-align: right;">1.41</td>
-<td style="text-align: right;">45.49</td>
-<td style="text-align: right;">39.68</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">19.49</td>
+<td style="text-align: right;">18.69</td>
 <td style="text-align: right;">0.5</td>
-<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.36</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28262,13 +28267,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-NU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.73</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.92</td>
+<td style="text-align: right;">0.84</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28454,13 +28459,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SK</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0.02</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.84</td>
+<td style="text-align: right;">0.87</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28550,13 +28555,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-SU</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">0.02</td>
+<td style="text-align: right;">0.18</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">inf</td>
-<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.5</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.79</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28652,7 +28657,7 @@ Pick a place to narrow the table.</p>
 <td style="text-align: right;">inf</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.61</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -28742,13 +28747,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">CD-TO</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">2.81</td>
+<td style="text-align: right;">3.31</td>
 <td style="text-align: right;">0.03</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;">0.5</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">-0.54</td>
 <td style="text-align: right;">2</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -37917,13 +37922,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">6.88</td>
+<td style="text-align: right;">4.06</td>
 <td style="text-align: right;">0.76</td>
-<td style="text-align: right;">9.1</td>
-<td style="text-align: right;">11.09</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">5.37</td>
+<td style="text-align: right;">12.38</td>
+<td style="text-align: right;">0.56</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.62</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38013,13 +38018,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">12</td>
+<td style="text-align: right;">6.1</td>
 <td style="text-align: right;">2.12</td>
-<td style="text-align: right;">5.67</td>
-<td style="text-align: right;">7.99</td>
-<td style="text-align: right;">0.85</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">2.88</td>
+<td style="text-align: right;">8.22</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.96</td>
+<td style="text-align: right;">0.6</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38109,13 +38114,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">11.07</td>
+<td style="text-align: right;">5.18</td>
 <td style="text-align: right;">2.28</td>
-<td style="text-align: right;">4.85</td>
-<td style="text-align: right;">1.49</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.89</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">1.65</td>
+<td style="text-align: right;">0.15</td>
+<td style="text-align: right;">0.93</td>
+<td style="text-align: right;">0.45</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38205,13 +38210,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-22</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">13.61</td>
+<td style="text-align: right;">6.36</td>
 <td style="text-align: right;">5.54</td>
-<td style="text-align: right;">2.45</td>
-<td style="text-align: right;">1.52</td>
-<td style="text-align: right;">0.06</td>
+<td style="text-align: right;">1.15</td>
+<td style="text-align: right;">1.66</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.73</td>
+<td style="text-align: right;">0.71</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38301,13 +38306,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-10-24</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">4.95</td>
+<td style="text-align: right;">5.18</td>
 <td style="text-align: right;">0.12</td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">73.82</td>
+<td style="text-align: right;">80.27</td>
 <td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.96</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.73</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38397,13 +38402,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">9.82</td>
+<td style="text-align: right;">8.85</td>
 <td style="text-align: right;">0.28</td>
-<td style="text-align: right;">35.01</td>
-<td style="text-align: right;">76.39</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.71</td>
+<td style="text-align: right;">31.55</td>
+<td style="text-align: right;">73.88</td>
+<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">0.96</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38493,13 +38498,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">9.68</td>
+<td style="text-align: right;">5.48</td>
 <td style="text-align: right;">0.94</td>
-<td style="text-align: right;">10.27</td>
-<td style="text-align: right;">1.37</td>
-<td style="text-align: right;">0.04</td>
-<td style="text-align: right;">0.33</td>
-<td style="text-align: right;">0.63</td>
+<td style="text-align: right;">5.81</td>
+<td style="text-align: right;">1.43</td>
+<td style="text-align: right;">0.07</td>
+<td style="text-align: right;">0.93</td>
+<td style="text-align: right;">0.57</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38589,13 +38594,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-22</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">14.34</td>
+<td style="text-align: right;">7.56</td>
 <td style="text-align: right;">2.72</td>
-<td style="text-align: right;">5.27</td>
-<td style="text-align: right;">2.02</td>
-<td style="text-align: right;">0.44</td>
-<td style="text-align: right;">0.98</td>
-<td style="text-align: right;">0.72</td>
+<td style="text-align: right;">2.77</td>
+<td style="text-align: right;">1.85</td>
+<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.68</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38685,13 +38690,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-01</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">4.49</td>
+<td style="text-align: right;">2.47</td>
 <td style="text-align: right;">0.18</td>
 <td style="text-align: right;"></td>
 <td style="text-align: right;"></td>
-<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">0.15</td>
 <td style="text-align: right;">0.96</td>
-<td style="text-align: right;">0.61</td>
+<td style="text-align: right;">0.58</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38781,13 +38786,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">3.89</td>
+<td style="text-align: right;">3.59</td>
 <td style="text-align: right;">0.46</td>
-<td style="text-align: right;">8.49</td>
-<td style="text-align: right;">7.23</td>
-<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">7.84</td>
+<td style="text-align: right;">8.45</td>
+<td style="text-align: right;">0.78</td>
 <td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.15</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38877,13 +38882,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-22</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">7.06</td>
+<td style="text-align: right;">3.62</td>
 <td style="text-align: right;">1.78</td>
-<td style="text-align: right;">3.95</td>
-<td style="text-align: right;">1.69</td>
-<td style="text-align: right;">0.13</td>
-<td style="text-align: right;">0.98</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">2.03</td>
+<td style="text-align: right;">1.63</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -38973,13 +38978,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-15</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">27</td>
-<td style="text-align: right;">2.69</td>
-<td style="text-align: right;">0.68</td>
 <td style="text-align: right;">3.94</td>
-<td style="text-align: right;">13.04</td>
-<td style="text-align: right;">0.89</td>
+<td style="text-align: right;">0.68</td>
+<td style="text-align: right;">5.78</td>
+<td style="text-align: right;">16.1</td>
+<td style="text-align: right;">0.78</td>
 <td style="text-align: right;">0.93</td>
-<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.21</td>
 <td style="text-align: right;">27</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -39069,13 +39074,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-22</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">5.87</td>
+<td style="text-align: right;">3.48</td>
 <td style="text-align: right;">1.09</td>
-<td style="text-align: right;">5.41</td>
-<td style="text-align: right;">2.67</td>
-<td style="text-align: right;">0.52</td>
+<td style="text-align: right;">3.21</td>
+<td style="text-align: right;">3.09</td>
+<td style="text-align: right;">0.54</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">0.45</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
@@ -39165,13 +39170,13 @@ Pick a place to narrow the table.</p>
 <td style="text-align: left;">2026-11-22</td>
 <td style="text-align: left;">foundation</td>
 <td style="text-align: right;">54</td>
-<td style="text-align: right;">4.38</td>
+<td style="text-align: right;">3.13</td>
 <td style="text-align: right;">0.28</td>
-<td style="text-align: right;">15.55</td>
-<td style="text-align: right;">56.57</td>
-<td style="text-align: right;">0.78</td>
-<td style="text-align: right;">0.96</td>
-<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">11.11</td>
+<td style="text-align: right;">64.22</td>
+<td style="text-align: right;">0.81</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.51</td>
 <td style="text-align: right;">54</td>
 <td style="text-align: left;">False</td>
 </tr>
