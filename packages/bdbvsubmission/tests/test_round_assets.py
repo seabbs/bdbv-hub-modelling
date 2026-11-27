@@ -82,15 +82,17 @@ def test_a_runs_candidates_and_gate_go_on_the_rounds_release(
     tar = tmp_path / "work" / "round-assets" / "round-2026-11-21-run-7.tar.gz"
     with tarfile.open(tar) as t:
         names = set(t.getnames())
-    # Every candidate's files, both gates with their validation logs and
-    # the round's context; never the fit directories or the PR body.
+    # Every candidate's files and the fit directory it forecast from,
+    # both gates with their validation logs and the round's context;
+    # never the PR body.
     assert "run-7/candidate-bvd/checks.json" in names
     assert "run-7/candidate-main/checks.json" in names
     assert any(n.endswith("seabbs-renewal/x.csv") for n in names)
     assert "run-7/gate/gate/validation/bvd.log" in names
     assert "run-7/baseline-gate/gate/provenance.json" in names
     assert "run-7/inputs/inputs/context.json" in names
-    assert not [n for n in names if "fit-bvd" in n or "/pr/" in n]
+    assert "run-7/fit-bvd/big.bin" in names
+    assert not [n for n in names if "/pr/" in n]
     log = (tmp_path / "gh.log").read_text()
     assert "release upload round-2026-11-21" in log
     assert "--clobber" in log

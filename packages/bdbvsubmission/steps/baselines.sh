@@ -8,7 +8,7 @@
 # so the submission, the backtest and the docs read the same ones. With
 # FIT_SOURCE=store this first waits for the walks' stored forecasts at
 # AS_OF (await_fits.sh, with its DISPATCH, WAIT_MINUTES, FIT_REF and
-# FIT_STORE_BRANCH).
+# FIT_STORE).
 #
 #   AS_OF       data vintage
 #   FIT_SOURCE  store, or fit (the default) to run the walks here
