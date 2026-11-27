@@ -80,6 +80,11 @@ Teams without the capacity to set up specialist models could also use them direc
   - They are typically developed using complex, high parameter neural networks, trained on many time series, and are able to learn general patterns in time series data.
   - Recent examples include Chronos-2 [@Ansari2025], TimesFM [@Das2024a] and Moirai [@Woo2024] which have all been shown to peroform well on a wide range of forecasting tasks.
   - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
+  - In the Ebola forecasting hub, two teams use foundation models zero-shot after a separate nowcast [@bdbv_modeling_hub_2026].
+    OHTJHU-BM takes a median ensemble of Chronos-2, TimesFM 2.5, Moirai 2.0 and Timestral on each nowcast draw [@bdbv_ohtjhu_bm].
+    ACCIDDA-insightcast pools the five best of statistical models and Chronos, TimesFM and Sundial in each place [@bdbv_accidda_insightcast].
+    A third, ACCIDDA-Chromantis, makes a negative binomial nowcast and then forecasts with custom neural networks trained on past Ebola outbreaks [@bdbv_accidda_chromantis].
+    No team fine-tunes a foundation model or gives it the reporting delays.
   - Most of the currently used foundation modles come with tools that allow them to be fine-tuned on new data.
   - This is a process where the weights of the model are modified to better fit the new data, usually using Low-Rank Adaptation (LoRA) or similar methods, which allow the model to be adapted to new data without requiring full retraining.
   - Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
@@ -160,7 +165,9 @@ Teams without the capacity to set up specialist models could also use them direc
 - For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to $E$ and is the target.
 - We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The lagged series can have values up to the latest data release.
 - The lagged series are covariates (Foundation model). Their values up to $E$ are past inputs, and their values after $E$ are known future inputs, which the model can use to forecast the count series.
-- Chronos-2 takes every place's count and lagged series together, in one group we call a block. It then forecasts every place's count series.
+- We put every place's count and lagged series, at every level such as the country, its provinces and their health zones, into one group we call a block.
+- Aggregates go in the same block, such as a place's weekly totals or 7-day sums beside its daily counts.
+- Chronos-2 then forecasts every count and aggregate series together in one pass.
 - At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user for their setting.
 - To estimate $D$, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. $D$ is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
 - If not enough data is available for any of the reference dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
@@ -309,7 +316,6 @@ $D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the
 - **Forecasting.**
   - The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$.
   - We therefore set $D$ to 42 days for the fine-tuned and zero-shot models and the random walk nowcast alike, based on our experience modelling the outbreak.
-  - Chronos-2 takes daily counts with daily lagged series and a weekly total row per place, and the hub's weekly targets come from that row in the same forecast.
   - The fine-tuned model makes two forecasts at each nowcast date, as all zones together exceed the block size that fits in GPU memory (Supporting Information, *Ebola forecast layout*; *Fitting in GPU memory*).
   - One is a single block of the country, all provinces and the active health zones.
   - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
@@ -341,6 +347,7 @@ $D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the
 
 ::: {.callout-note title="Plan"}
 - We gave the random walk nowcast's point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning (@fig-design B).
+- Zero-shot, this is how the Ebola hub teams that use foundation models use them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
 - We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
@@ -450,6 +457,8 @@ It [outperformed / performed comparably to] the hub's models, ranking [X] of [X]
 - We show every hub round, with the fine-tuned model's first submission marked, and give scores before and after it apart, as for the German halves.
 - Rounds before the first submission are retrospective for the fine-tuned model, and rounds after it are prospective.
 - Our submitted renewal model is scored as one of the hub submissions.
+- Among the hub submissions we focus on those closest to ours: the two that use foundation models zero-shot after a nowcast, OHTJHU-BM and ACCIDDA-insightcast, and the custom neural network ACCIDDA-Chromantis [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast; @bdbv_accidda_chromantis].
+- The other submissions are in the Supporting Information (*Ebola hub submissions*).
 - The first paragraph describes the national nowcasts against the truth.
 - The second paragraph gives the scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast, the other hub submissions and our renewal model, relative to the hub's baseline, then by location and horizon (Supporting Information, *Ebola hub submissions*).
 :::
@@ -514,7 +523,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We ported the epinowcast model to PyRenew rather than using it directly.
     However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (Supporting Information, *Renewal model*).
   - We did not compare directly with Mantis or other custom neural networks trained for this task [@Dudley2026].
-    The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams' forecasts [@accidda_chromantis; @bdbv_modeling_hub_2026].
+    The ACCIDDA-Chromantis hub submission is one such model, a negative binomial nowcast followed by neural networks trained on past Ebola outbreaks, and we compare with it only through its Ebola hub forecasts [@bdbv_accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
   - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past Ebola rounds to decide whether to submit it.
@@ -534,12 +543,14 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Comparison with foundation models and neural networks.**
   - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+    In the Ebola hub, both teams that use foundation models do this, and pool several of them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
+    Our zero-shot model given the random walk nowcast follows the same approach with one foundation model, so the gap between it and the fine-tuned model shows what fine-tuning adds over a separate nowcast.
     Our model learns the delays itself, so nowcasting and forecasting happen in one step.
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
   - Mantis and the UMass axial model use simulations to teach transmission dynamics to custom neural network architectures, while we use them to teach reporting delays to a general foundation model and keep its own forecasting [@Dudley2026; @umass_axial].
   - Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly [@Dudley2026].
   - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
-  - Domain knowledge enters our model in two ways, through the simulations and through the attention biases, which add what the model cannot learn from values alone, which series belong to which place and how places nest [@Woo2024; @Yang2022].
+  - Domain knowledge enters our model in two ways, through the simulations and through the attention biases, which tell the model which series belong to which place and how places nest, rather than leaving it to learn these from the values [@Woo2024; @Yang2022].
     Whether each route improves the nowcasts and forecasts is to be filled in from the results and the sensitivity analyses.
   - This gives a case study for adding domain knowledge to foundation models in other fields where a well-tested generative model of the data exists.
   - Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026; @Koucha2026; @Laglil2026; @Das2024b; @Hu2021; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
