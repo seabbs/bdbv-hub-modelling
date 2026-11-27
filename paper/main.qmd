@@ -241,13 +241,12 @@ The grid shows group attention at one step, with three series per place.
 
 ::: {.callout-note title="Plan"}
 - **Foundation model baselines.**
-  - We compared the fine-tuned model with zero-shot Chronos-2 in two ways (@fig-design B).
-  - Zero-shot Chronos-2 on the reporting triangle gets the same inputs as the fine-tuned model, so only the weights differ.
-  - Zero-shot Chronos-2 on complete data gets each place's latest counts as if complete, with no lag series, as foundation models are mostly used in forecast hubs [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+  - We compared the fine-tuned model with zero-shot Chronos-2 in two ways (@fig-design B):
+    - Zero-shot Chronos-2 on the reporting triangle gets the same inputs as the fine-tuned model, so only the weights differ.
+    - Zero-shot Chronos-2 on complete data gets each place's latest counts as if complete with no lag series, as a reference that ignores reporting delays.
   - We plotted each checkpoint's scores against both (Supporting Information, *Checkpoint curve*).
 - **Random walk nowcast.**
   - The random walk nowcast nowcasts recent weeks with our port of baselinenowcast, which we extended to releases more than a day apart, and forecasts each nowcast draw with a random walk on the log scale [@Johnson2025] (Supporting Information, *Baselines*).
-  - Scores in each study are relative to the random walk nowcast unless the study has its own baseline.
 - **Renewal models.**
   - We fitted renewal models built on our port of epinowcast to the Ebola hub data, and submitted them in real time [@pyrenew; @bdbv_modeling_hub_2026] (Supporting Information, *Renewal model*).
   - The main renewal model fits the health zones with recent cases together, pooled within provinces and linked by importation.
@@ -271,6 +270,7 @@ Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig
 - We held out a test set of simulations from development, and monitored training on a separate validation set (Supporting Information, *Grid settings and checks*).
 - Fine-tuning never used the test set (Supporting Information, *Grid settings and checks*).
 - We set each tuned choice on development data, apart from every scored set (Supporting Information, *Choices tuned on development data*).
+- We report scores relative to the random walk nowcast.
 - We scored quantiles with the weighted interval score (WIS) on the natural and log scales, split into dispersion, overprediction and underprediction, with bias and 50% and 90% coverage [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx].
 - We also scored samples with the fair CRPS and the fair energy score, so forecasts with different numbers of samples compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024] (Supporting Information, *Scoring*).
 - We scored with scoringrules, checked against scoringutils [@zanetta_scoringrules_2024; @bosse2022scoringutils].
