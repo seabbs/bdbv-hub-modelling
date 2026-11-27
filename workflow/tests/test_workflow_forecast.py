@@ -135,6 +135,18 @@ EVALUATION_RULES = (
 whole GPU once none does, never pausing training."""
 
 
+SPLIT_RULES = ("evaluate_base", "evaluate_checkpoint")
+"""The one-pass held-out evaluations, split over CPU workers."""
+
+
+def test_the_held_out_pass_splits_over_the_rule_s_threads():
+    for name in SPLIT_RULES:
+        text = _rule_text(name)
+        assert "EVALUATE_WORKERS={params.workers} " in text, name
+        assert "workers=evaluation_workers" in text, name
+        assert "EVALUATION_MEMORY" in text, name
+
+
 def test_evaluation_never_pauses_training():
     for name in EVALUATION_RULES:
         text = _rule_text(name)

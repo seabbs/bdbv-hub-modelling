@@ -444,3 +444,45 @@ def test_validation_records_name_their_own_blocks(monkeypatch):
     # Each record's truth is its own block's horizon.
     for r, block in zip(got, val, strict=True):
         assert len(r["rows"][0]["truth"]) == block["prediction_length"]
+
+
+def test_the_evaluation_s_workers_come_from_the_environment(monkeypatch):
+    monkeypatch.delenv(fe.WORKERS_ENV, raising=False)
+    assert fe.evaluate_workers("cpu") == 1
+    monkeypatch.setenv(fe.WORKERS_ENV, "3")
+    assert fe.evaluate_workers("cpu") == 3
+    # Off the CPU the pass runs in one process, which holds the device.
+    assert fe.evaluate_workers("cuda") == 1
+    assert fe.evaluate_workers("mps") == 1
+
+
+@pytest.mark.usefixtures("short_context")
+@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded")
+@pytest.mark.parametrize(
+    "kinds", [["start"], ["checkpoint"], ["monitor", "by_source"]]
+)
+def test_a_split_evaluation_gives_what_one_process_does(
+    tmp_path, monkeypatch, kinds
+):
+    # The batches are those one process runs, split over the workers,
+    # so every loss and the coverage are the same, bit for bit. Forked
+    # here, so the workers see the stubs.
+    import multiprocessing
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("no fork on this platform")
+    monkeypatch.setattr(fe, "START_METHOD", "fork")
+    monkeypatch.setattr(fe, "load_base", lambda _device: tiny_model())
+    val = blocks(7)
+    path = tmp_path / fs.HELD_OUT_BLOCKS
+    fs.save_blocks(val, path)
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(trained(), where, {"step": 100})
+    got = {}
+    for n in (1, 3):
+        base = tiny_model()
+        series_bias.attach_for(base, where / "adapter")
+        split = fe.Split(n, path, len(val))
+        got[n] = fe.evaluate(where / "adapter", base, val, kinds, 2, split)
+    assert got[1] == got[3]
+    assert got[1]

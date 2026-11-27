@@ -150,3 +150,56 @@ def test_base_chronos_2_s_step_0_is_cached_by_model_and_held_out_set(
     # Scored once: the second run takes the first's from the cache.
     assert [c[1] for c in calls["evals"]] == [["start"]]
     assert len(list(cache.glob("*.json"))) == 1
+
+
+@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded")
+def test_the_runner_writes_the_same_results_over_workers(tmp_path, monkeypatch):
+    # End to end on a tiny Chronos-2: step 0 and a checkpoint scored in
+    # one process and over three workers write the same results.
+    import multiprocessing
+    import sys
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("no fork on this platform")
+    sys.path.insert(0, str(ROOT / "packages/nowcastfoundation/tests"))
+    from chronos_toy import tiny_model
+    from test_finetune_offload import blocks, trained
+
+    mod = runner()
+    fs = mod.fs
+    monkeypatch.setattr(fs.ft, "CONTEXT", 48)
+    monkeypatch.setattr(mod.fe, "START_METHOD", "fork")
+    monkeypatch.setattr(mod.fe, "load_base", lambda _device: tiny_model())
+    out = {}
+    for n in (1, 3):
+        monkeypatch.setenv(mod.fe.WORKERS_ENV, str(n))
+        train = tmp_path / f"w{n}" / "train"
+        train.mkdir(parents=True)
+        val = blocks(7)
+        fs.save_blocks(val, train / fs.HELD_OUT_BLOCKS)
+        model = trained()
+        request = {"n_validation": len(val), "batch_size": 2}
+        fs.save_snapshot(
+            model,
+            train / "evals" / "step-0000000",
+            {**request, "step": 0, "kinds": ["start"]},
+        )
+        where = train / "n500"
+        model.save_pretrained(where / "finetuned-ckpt")
+        (where / "settings.json").write_text(
+            json.dumps({**request, "steps": 200})
+        )
+        mod.main(["base", str(where), "--device", "cpu"])
+        mod.main(["checkpoint", str(where), "--device", "cpu"])
+        out[n] = [
+            {
+                k: v
+                for k, v in json.loads(path.read_text()).items()
+                if k != "seconds"
+            }
+            for path in (
+                train / "evals" / "step-0000000.json",
+                where / "held-out.json",
+            )
+        ]
+    assert out[1] == out[3]

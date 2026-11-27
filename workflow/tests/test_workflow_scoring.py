@@ -224,3 +224,28 @@ def test_the_evaluation_leaves_a_german_unit_its_workers(tmp_path):
 
     s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
     assert s.evaluate_threads == machine.scoring_threads(s.local, 3)
+
+
+def test_the_evaluation_splits_over_workers_of_the_forecast_threads(tmp_path):
+    # Each worker takes a forecasting job's threads (`forecast.threads`);
+    # off the CPU the pass runs in one process.
+    import dataclasses
+
+    s = _scoring(tmp_path, labels=[])
+    each = s.unit_threads
+    assert s.evaluation_workers(4 * each) == 4
+    assert s.evaluation_workers(4 * each + 1) == 4
+    assert s.evaluation_workers(each) == 1
+    assert s.evaluation_workers(1) == 1
+    s.checkpoint_forecast = dataclasses.replace(
+        s.checkpoint_forecast, device="cuda"
+    )
+    assert s.evaluation_workers(4 * each) == 1
+
+
+def test_the_evaluation_memory_floor_counts_its_workers(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    n = s.evaluation_workers(s.evaluate_threads)
+    assert s.evaluation_memory_floor() == (
+        scoring.EVALUATION_WORKER_MB * n + scoring.EVALUATION_COORDINATOR_MB
+    )
