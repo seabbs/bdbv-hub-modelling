@@ -42,6 +42,7 @@ def test_new_factors_have_a_layer_and_keep_todays_level(grid):
         "delay_change_switch": "none",
         "delay_change_combine": "single",
         "delay_counts": "none",
+        "bursts": "none",
     }
     for factor, level in keep.items():
         assert factor in grid["factor_layers"]
@@ -111,3 +112,41 @@ def test_delay_counts_slopes_take_either_sign(grid, sims):
     for level in grid["factors"]["delay_counts"]:
         want = _weight(grid, "delay_counts", level)
         assert abs(_share(sims, "delay_counts", level) - want) < 0.05
+
+
+def test_bursts_are_rare_short_and_mostly_one_stratum(grid, sims):
+    with_bursts = [(d, v) for d, v in sims if d["bursts"] == "yes"]
+    assert abs(len(with_bursts) / len(sims) - 0.05) < 0.02
+    one = 0
+    for d, v in sims:
+        n = len(v["burst_strata"])
+        for key in ("burst_at", "burst_days", "burst_mult", "burst_keep"):
+            assert len(v[key]) == n
+        if d["bursts"] == "none":
+            assert n == 0
+            continue
+        n_a = d["n_ages"]
+        quiet = set(v["quiet_places"])
+        assert n >= 1
+        assert all((s - 1) // n_a + 1 not in quiet for s in v["burst_strata"])
+        assert all(1 <= k <= 7 for k in v["burst_keep"])
+        assert all(k >= 2 for k in v["burst_days"])
+        one += n == 1
+    assert one / len(with_bursts) > 0.6
+    # The first report over the final count: about 1.5 to 7 (5-95%).
+    mult = np.asarray(
+        [
+            draws.draw_setting(grid, "burst_mult", draws.generator(1, i))
+            for i in range(4_000)
+        ]
+    )
+    lo, hi = np.quantile(mult, [0.05, 0.95])
+    assert 1.3 < lo < 1.8
+    assert 6 < hi < 8
+
+
+def test_over_reporting_rates_reach_bremen_like_values(grid):
+    rate = draws.draw_setting(grid, "revise_over", draws.generator(2), 50_000)
+    assert 0.005 < np.median(rate) < 0.03
+    assert 0.005 < np.mean(rate > 0.5) < 0.03
+    assert np.mean(rate > 1.5) > 0

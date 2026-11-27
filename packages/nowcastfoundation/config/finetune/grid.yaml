@@ -64,6 +64,10 @@ counts:
   shocks_per_place: {base: 1, mean: 0.5}
   shock_weeks: {base: 1, mean: 1}
   slow_weeks: {base: 1, mean: 3}
+  burst_strata: {base: 1, mean: 0.15}
+  bursts_per_stratum: {base: 1, mean: 0.15}
+  burst_days: {base: 2, mean: 5}
+  burst_keep_days: {base: 1, mean: 2}
   active_places: {base: 1, mean: 1}
   late_places: {base: 1, mean: 0.5}
   # Strata: places and ages, drawn again until the system fits the
@@ -118,6 +122,7 @@ factor_layers:
   delay_change_switch: delays
   delay_change_combine: delays
   delay_counts: delays
+  bursts: reporting
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -137,6 +142,7 @@ weekday_noise: 0.3
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
   expected_scale: 1000
+  burst_keep_max: 7    # the most days an over-reporting burst stands
 factors:
   gt_family:
     gamma: 1
@@ -319,6 +325,14 @@ factors:
     shared: 1
     strata: 1
     strata_time: 1
+  # Short over-reporting bursts in 5% of sims, as Bremen's in January
+  # 2022: for a few days to two weeks of reference dates in one stratum
+  # (rarely more, or more bursts), the first report is 1.5 to 7 times
+  # the final count and the excess is withdrawn 1 to 7 days later. The
+  # slow revisions (`revisions`) are separate.
+  bursts:
+    none: 19
+    'yes': 1
 distributions:
   quiet:
     dist: beta
@@ -874,13 +888,25 @@ distributions:
     layer: reporting
     why: shocks away from the ends
   revise_over:
+    dist: lognormal
+    median: 0.017
+    sdlog: 1.5
+    layer: reporting
+    why: a few percent of counts reported in error (0.1% to 20%, 5-95%), with a tail to 0.5 and beyond (1 in 80) where most of a release is in error
+  burst_at:
     dist: beta
-    a: 0.6
-    b: 19.4
+    a: 2.0
+    b: 2.0
     lower: 0.0
     upper: 1.0
     layer: reporting
-    why: a few percent of counts reported in error
+    why: over-reporting bursts away from the ends
+  burst_mult:
+    dist: lognormal
+    median: 3.2
+    sdlog: 0.45
+    layer: reporting
+    why: a burst's first report at about 1.5 to 7 times the final count (5-95%), as Bremen's 5 to 7
   revise_move:
     dist: beta
     a: 0.6

@@ -619,9 +619,7 @@ def draw_values(
     v["shock_weeks"] = vec(dc("shock_weeks", n_shocks))
     v["shock_mult"] = vec(ds("shock_mult", n_shocks))
     rep = design["reporting_strata"]
-    v["revise_over"] = stratum_values(
-        grid, rep, n_s, "revise_over", rng, probability=True
-    )
+    v["revise_over"] = stratum_values(grid, rep, n_s, "revise_over", rng)
     v["revise_move"] = stratum_values(
         grid, rep, n_s, "revise_move", rng, probability=True
     )
@@ -656,6 +654,26 @@ def draw_values(
     v["delay_counts_sign"] = vec(sign)
     v["delay_counts_slope"] = ds("delay_counts_slope")
     v["delay_counts_sd"] = ds("delay_counts_sd")
+    # Over-reporting bursts (`bursts`): a few, usually one, strata with
+    # cases, each with one or more short bursts.
+    n_a = int(design["n_ages"])
+    with_cases = [s + 1 for s in range(n_s) if s // n_a + 1 in cases]
+    if design.get("bursts", "none") == "none":
+        burst: list[int] = []
+    else:
+        burst = _sample(
+            rng, with_cases, min(len(with_cases), dc("burst_strata"))
+        )
+    per_stratum = dc("bursts_per_stratum", len(burst))
+    v["burst_strata"] = [
+        s for s, k in zip(burst, per_stratum, strict=True) for _ in range(k)
+    ]
+    n_bursts = len(v["burst_strata"])
+    v["burst_at"] = vec(ds("burst_at", n_bursts))
+    v["burst_days"] = vec(dc("burst_days", n_bursts))
+    v["burst_mult"] = vec(ds("burst_mult", n_bursts))
+    keep = int(grid["constants"]["burst_keep_max"])
+    v["burst_keep"] = vec(np.minimum(dc("burst_keep_days", n_bursts), keep))
     return v
 
 
