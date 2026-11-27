@@ -254,15 +254,13 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 :::
 
 ![The study design.
-(A) What we fine-tune Chronos-2 on: each model trains LoRA adapters from pretrained Chronos-2, and its glyph shows its input block and attention biases as in Figure 1.
-The main model is fine-tuned on simulated data with all attention biases.
-The real-data model is fine-tuned on the German data to 9 February 2022 and the Ebola hub releases to 8 November 2026.
-(B) How the models are used in each study, with the maximum delay set for each hub.
-Zero-shot Chronos-2 gets either complete counts, each place's latest counts with no lag series, or the reporting triangle.
-Nowcast → Chronos-2 gives the random walk nowcast's point nowcast to Chronos-2 as complete counts, zero-shot and fine-tuned.
-The fine-tuning ablations, the other attention bias setups and the model without lag series, are scored on the validation simulations and the German data to 9 February 2022.
-The real-data model is scored on the German data from 10 February 2022 and the Ebola rounds after its last training release.
-Filled dots mark the main text, outlined dots the Supporting Information, and stars the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig-design}
+(A) What we fine-tune Chronos-2 on.
+Zero-shot Chronos-2 is used as pretrained, and each fine-tuned model trains LoRA adapters on simulated or real data.
+Each glyph shows the model's input block and attention biases as in Figure 1.
+The ablations of the fine-tuned model drop some attention biases or the lag series.
+(B) Which studies each model is run in, with the maximum delay set for each hub.
+Labels give the data a model is scored on where it differs.
+Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig-design}
 
 ### Evaluation on held-out synthetic data
 
