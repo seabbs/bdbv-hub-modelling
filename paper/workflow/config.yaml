@@ -87,6 +87,11 @@ germany:
   config: packages/nowcastgermany/config/germany.toml
   data: data/raw/germany
   results: results/germany
+  # The fine-tuning workflow's German units (<SCORE_CACHE>/germany-days),
+  # whose reference unit and the final run's final checkpoint's unit
+  # (under `final_run`) are our development forecasts: no German backtest
+  # runs for the development half.
+  units: $SCORE_CACHE/germany-days
   # Further forecasts of the benchmark from evidence rows (`evidence`
   # below), such as models run outside packages/nowcastgermany/config/germany.toml: `models`
   # keeps the models matching a regular expression, `suffix` renames

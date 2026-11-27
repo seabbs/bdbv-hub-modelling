@@ -163,7 +163,6 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`, [Endpoint releases](#endpoint-releases)), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
 - `ft_check_release`: a saved checkpoint's BDBV check page (`ft_check_page`), named by the hash in its settings (`<ck>/ft-check.done`). A fine-tuned checkpoint's BDBV check forecast waits for its release.
 - `release_held_out`: an offloaded checkpoint's held-out losses (`held-out.json`), uploaded to its release once scored (`<ck>/held-out-released.txt`).
-- `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `packages/nowcastfoundation/config/finetune.toml` pins.
 - `publish_hf`: opt-in and named by its output only (`<ck>/huggingface.json`), uploads a verified checkpoint to the Hugging Face Hub repository `[huggingface] repo` in `packages/nowcastfoundation/config/finetune.toml`: its adapter, settings, `sha256sums.txt` and model card (`publish-hf`, `nowcastfoundation.hubpublish`), as the revision tagged with its spec. The token is `HF_TOKEN` from the environment. With `huggingface.dry_run` in the config, or no repository, it only writes the folder `<ck>/huggingface/`.
 - `publish`: every saved checkpoint, with its held-out losses once scored.
 
@@ -248,13 +247,15 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
 
 - Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `ebola_data` (the hub's releases, downloaded on the driver for `ebola_backtest`), `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
-- Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
+- German development table: `germany_development` stacks the reference unit and the final run's final checkpoint's unit (`score_germany`, `score_run_germany`) with `nowcastgermany units`, so the German development half is never forecast twice.
+- Benchmarks: `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Round releases: our submissions are read from the hub's clone (`ebola_hub`), and `round_releases` reads the models each round did not submit from that round's release (`round-<reference date>`, its `hub.zip`), with the submission ledger's table naming what each round submitted.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.
 - Progress figures: `progress_runa`, `progress_noslots`, `progress_nodelays` and `progress_realdata`, one per paper run (`live_run` and `comparisons` in `paper/workflow/config.yaml`), from the run's `run_progress` and `horizon_table` tables, or on Pages from the stored copies in the `finetune` set.
 - Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, and `promote_paper_synthetic`, `promote_paper_finetune`, `promote_paper_simulations` and `promote_paper_germany` name it in `paper-<set>-main` ([Endpoint releases](#endpoint-releases)), gathered by the opt-in target `paper_inputs`.
+  The `germany` set holds our German development forecasts from the units (`germany-units.csv.gz`), which Site results reads for the site's German page through `paper-germany-main`.
 
 ## A fine-tuning run
 

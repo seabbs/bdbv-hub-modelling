@@ -34,10 +34,20 @@ def test_each_set_names_its_files_from_the_config() -> None:
         "pairing-germany.csv.gz",
         "pairing-germany-rho.csv.gz",
         "germany-forecasts.csv.gz",
+        "germany-units.csv.gz",
+        "germany-units.json",
     }
     # The development half's table only, never the held-out one.
     assert sets["germany"]["germany-forecasts.csv.gz"] == (
         f"{CONFIG['germany']['results']}/paper-forecasts.csv.gz"
+    )
+    # Our models' development forecasts from the fine-tuning workflow's
+    # units (`nowcastgermany units`), which Site results reads too.
+    assert sets["germany"]["germany-units.csv.gz"] == (
+        f"{CONFIG['germany']['results']}/forecasts.csv.gz"
+    )
+    assert sets["germany"]["germany-units.json"] == (
+        f"{CONFIG['germany']['results']}/units.json"
     )
     assert (
         sets["synthetic"]["synthetic-dev.csv.gz"]
@@ -109,6 +119,7 @@ def test_the_hash_follows_the_contents_not_the_paths(tmp_path: Path) -> None:
         pd.DataFrame({"study": ["synthetic"], "location": ["33800-0001"]}),
         pd.DataFrame({"seed": [33801]}),
         pd.DataFrame({"study": ["germany"], "origin_date": ["2022-03-01"]}),
+        pd.DataFrame({"study": ["germany"], "origin": ["2022-03-01"]}),
     ],
 )
 def test_held_out_rows_are_never_published(
@@ -229,6 +240,45 @@ def test_promoting_a_set_names_its_release_in_its_pointer(
     with pytest.raises(RuntimeError, match="main"):
         stored.promote(released, ("main",), run=gh)
     assert "paper-germany-main" not in gh.releases
+
+
+def test_fetch_takes_only_the_sets_asked_for(
+    tmp_path: Path, fake_releases
+) -> None:
+    # Site results reads the German set alone, through its pointer.
+    gh = fake_releases(
+        {
+            "paper-germany-aaa": {stored.ASSET: ""},
+            "paper-germany-bbb": {stored.ASSET: ""},
+            "paper-germany-main": {
+                pointers.ASSET: json.dumps({"tag": "paper-germany-bbb"})
+            },
+            "paper-finetune-c": {stored.ASSET: ""},
+            "paper-finetune-main": {
+                pointers.ASSET: json.dumps({"tag": "paper-finetune-c"})
+            },
+        }
+    )
+    files = {
+        "germany-units.csv.gz": _write(
+            tmp_path / "h" / "u.csv", pd.DataFrame({"v": [1]})
+        )
+    }
+    asked = []
+
+    def download(tag: str, dest: Path) -> Path:
+        asked.append(tag)
+        return stored.bundle("germany", files, dest)
+
+    stored.fetch(
+        tmp_path / "stored", _pointer(gh), download, names=("germany",)
+    )
+    assert asked == ["paper-germany-bbb"]
+    assert (tmp_path / "stored" / "germany" / "germany-units.csv.gz").exists()
+    out = tmp_path / "cli"
+    args = ["fetch", str(out), "--overlay", str(tmp_path / "o.yml")]
+    parsed = stored.parser().parse_args([*args, "--set", "germany"])
+    assert parsed.set == ["germany"]
 
 
 def test_stored_outputs_stand_in_for_the_host_rules() -> None:

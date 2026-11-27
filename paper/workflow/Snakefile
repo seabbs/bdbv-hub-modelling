@@ -204,30 +204,35 @@ if FLOW.host_outputs:
             "--out {params.germany_data}"
 
     rule germany_development:
+        # Our development forecasts are the fine-tuning workflow's German
+        # units (`FLOW.germany_units()`: the reference and the final
+        # checkpoint's), stacked and scored, never forecast again here,
+        # then the hub teams'. `release_paper_germany`
+        # publishes them, for Pages and Site results alike.
         input:
             TRIANGLE,
             FINETUNED,
+            units=[f"{u}.done" for u in FLOW.germany_units()],
         output:
             f"{GERMANY['results']}/paper-forecasts.csv.gz",
+            f"{GERMANY['results']}/forecasts.csv.gz",
+            f"{GERMANY['results']}/units.json",
         log:
             f"{R}/logs/germany_development.log",
-        benchmark:
-            f"{R}/benchmarks/germany_development/germany_development.tsv"
         conda:
             TOOLS_ENV
-        threads: FORECAST.threads
-        resources:
-            gpu=FORECAST.gpu,
         params:
-            env=FORECAST.env,
-            ft=FT_EXPORT,
             germany=GERMANY_CLI,
             germany_root_config=GERMANY["config"],
             args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+            units=" ".join(FLOW.germany_units()),
+            record=" ".join(f"--record {r}" for r in FINETUNED),
             out=lambda w, output: Path(output[0]).parent,
         shell:
-            "exec >{log} 2>&1; {params.ft} {params.env} "
-            "{params.germany} backtest {params.args} --out {params.out} && "
+            "exec >{log} 2>&1; "
+            "{params.germany} units {params.units} "
+            "--config {params.germany_root_config} --out {params.out} "
+            "{params.record} && "
             "{params.germany} teams {params.args} --out {params.out} && "
             "{params.germany} paper --config {params.germany_root_config} "
             "--results {params.out}"

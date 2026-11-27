@@ -190,8 +190,10 @@ def test_every_model_has_its_own_colour_and_dash() -> None:
 FT = "foundation"
 
 
-def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
-    """Add the stored fine-tuned model, as `nowcastgermany ft-load` does."""
+def _with_ft(
+    res: Path, release: str | None = "paper-germany-0123456789ab"
+) -> None:
+    """Add the fine-tuned model, as `nowcastgermany stored-load` does."""
     fc = pd.read_csv(res / "forecasts.csv.gz", dtype=str)
     ft = _forecasts((FT,))
     ft = ft.loc[ft["origin"] < CONFIG.split_date]
@@ -203,11 +205,11 @@ def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
         res / "scores.csv.gz", index=False
     )
     meta = {
-        "tag": tag,
-        "pinned": "chronos-ft-bbb",
-        "models": [FT, "foundation"],
+        "release": release,
+        "checkpoint": "chronos-slots-66a7a630d729",
+        "models": [FT, "randomwalknowcast"],
     }
-    (res / "ft-checkpoint.json").write_text(json.dumps(meta))
+    (res / "units.json").write_text(json.dumps(meta))
 
 
 def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
@@ -241,30 +243,26 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     assert FT in {m["name"] for m in data["models"]}
 
 
-def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
+def test_the_page_names_the_release_and_checkpoint(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     _with_ft(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
     germany_page(fig, gen, res, CONFIG, list)
     note = (gen / "germany-ft.md").read_text()
-    assert "chronos-ft-bbb" in note
-    assert FT in note
-    assert "foundation" in note
-    # The checkpoint is named once for both models.
-    assert note.count("chronos-ft-bbb") == 2  # link text and URL
-    assert "releases/tag/chronos-ft-bbb" in note
+    # The paper's release the forecasts come from, and the checkpoint.
+    assert "releases/tag/paper-germany-0123456789ab" in note
+    assert "releases/tag/chronos-slots-66a7a630d729" in note
+    assert "paper" in note
 
 
-def test_the_page_says_when_no_ft_checkpoint_is_stored(
-    tmp_path: Path,
-) -> None:
+def test_the_page_says_when_nothing_is_published(tmp_path: Path) -> None:
+    gen = tmp_path / "generated"
     res = tmp_path / "germany"
-    _scores(res)
-    _with_ft(res, tag=None)
-    fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG, list)
-    assert "not stored yet" in (gen / "germany-ft.md").read_text()
+    res.mkdir()
+    (res / "units.json").write_text(json.dumps({"release": None}))
+    germany_page(tmp_path / "figures", gen, res, CONFIG, list)
+    assert "paper-germany" in (gen / "germany-ft.md").read_text()
 
 
 def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
