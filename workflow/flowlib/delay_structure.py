@@ -129,7 +129,11 @@ def _strata(
     rows: pd.DataFrame, parent: Callable[[str], str | None] | None
 ) -> list[dict[str, Any]]:
     total = {"name": "all", "level": "total", **_summary(rows)}
-    names = rows.groupby("stratum")["count"].sum().sort_values(ascending=False)
+    names = (
+        rows.groupby("stratum")["count"]
+        .sum()
+        .sort_values(ascending=False, kind="stable")
+    )
     if len(names) < 2:
         return [total]
     names = list(names.index[:MAX_STRATA])
