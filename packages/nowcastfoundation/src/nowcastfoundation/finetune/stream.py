@@ -39,7 +39,6 @@ import os
 import pickle
 import shutil
 import subprocess
-import tempfile
 import time
 import zlib
 from collections.abc import Callable, Iterator, Sequence
@@ -60,12 +59,12 @@ from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     LAYOUTS,
-    MAIN_FILE,
     MAIN_TAG,
     SUMS_FILE,
     checkpoint_spec,
     release_tag,
 )
+from nowcastutils import pointers
 
 CHUNK = 500
 """Outbreaks per chunk."""
@@ -1675,15 +1674,18 @@ def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
 
 
 def promote_main(
-    where: Path, run_name: str, run: Any = subprocess.run
+    where: Path,
+    run_name: str,
+    branches: Sequence[str],
+    run: Any = subprocess.run,
 ) -> dict[str, Any]:
     """Name a released checkpoint the main run's newest, in `MAIN_TAG`.
 
     `MAIN_FILE` of the release `MAIN_TAG` records the run and the
-    checkpoint, and the release notes name it; the fine-tuned models load
-    it (`forecaster.latest_spec`). The release is made on first use, and
-    each later call replaces its record. Only the main fine-tuning run
-    (the paper's `live_run`) calls this.
+    checkpoint (`nowcastutils.pointers.promote`); the fine-tuned models
+    load it (`forecaster.latest_spec`). Only the main fine-tuning run
+    (the paper's `live_run`) calls this, from a commit on one of
+    `branches`.
 
     Parameters
     ----------
@@ -1691,6 +1693,8 @@ def promote_main(
         The checkpoint's folder, with its `settings.json`.
     run_name : str
         The main run's workflow name.
+    branches : sequence of str
+        The branches a promotion may run from.
     run : callable
         Runs a command, as `subprocess.run`.
 
@@ -1703,63 +1707,27 @@ def promote_main(
     ------
     RuntimeError
         If the checkpoint's own release (with its `SUMS_FILE`) is missing,
-        or `gh` fails.
+        HEAD is on none of `branches`, or `gh` fails.
     """
     settings = json.loads((where / "settings.json").read_text())
     spec = checkpoint_spec(settings)
     tag = release_tag(spec)
-
-    def gh(*command: str) -> subprocess.CompletedProcess[str]:
-        done: subprocess.CompletedProcess[str] = run(
-            ["gh", "release", *command, "-R", REPO],
-            capture_output=True,
-            text=True,
-        )
-        return done
-
-    view = gh("view", tag, "--json", "assets")
-    if view.returncode != 0 or SUMS_FILE not in {
-        a["name"] for a in json.loads(view.stdout)["assets"]
-    }:
-        raise RuntimeError(f"{tag} is not released, so it is not promoted")
-    n = settings.get("n_outbreaks")
-    record = {
-        "run": run_name,
-        "spec": spec,
-        "tag": tag,
-        "hash": str(settings["hash"]),
-        "n_outbreaks": n,
-    }
-    notes = (
-        f"The main fine-tuning run's ({run_name}) newest released "
-        f"checkpoint: {tag} ({n} outbreaks). The fine-tuned models load "
-        f"the checkpoint {MAIN_FILE} names. Each checkpoint keeps its own "
-        "release; ablation runs never change this one.\n\nThis was opened "
-        "by a bot. Please ping @seabbs for any questions."
+    record = pointers.promote(
+        MAIN_TAG.removesuffix(pointers.SUFFIX),
+        tag,
+        hash=str(settings["hash"]),
+        produced_by=f"fine-tuning run {run_name} (rule publish_checkpoint)",
+        branches=branches,
+        repo=REPO,
+        title="Chronos-2 fine-tuned, main run",
+        needs=SUMS_FILE,
+        extra={
+            "run": run_name,
+            "spec": spec,
+            "n_outbreaks": settings.get("n_outbreaks"),
+        },
+        run=run,
     )
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / MAIN_FILE
-        path.write_text(json.dumps(record, indent=1) + "\n")
-        steps: list[tuple[str, ...]]
-        if gh("view", MAIN_TAG, "--json", "assets").returncode != 0:
-            steps = [
-                (
-                    "create", MAIN_TAG, "--latest=false", "--title",
-                    "Chronos-2 fine-tuned, main run", "--notes", notes,
-                    str(path),
-                )
-            ]  # fmt: skip
-        else:
-            steps = [
-                ("upload", MAIN_TAG, str(path), "--clobber"),
-                ("edit", MAIN_TAG, "--notes", notes),
-            ]
-        for step in steps:
-            result = gh(*step)
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"could not {step[0]} {MAIN_TAG}: {result.stderr}"
-                )
     log(f"{MAIN_TAG} names {tag} of {run_name}")
     return record
 

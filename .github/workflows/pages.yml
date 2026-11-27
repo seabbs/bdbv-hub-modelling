@@ -249,7 +249,8 @@ jobs:
       # As `task paper`, with the Pages config (paper/workflow/pages.yaml),
       # which leaves out the simulations, fine-tuning runs and their scores
       # that the workflow's hosts make. Their published outputs (the
-      # paper-<set>-<hash> releases) are fetched and read as inputs.
+      # paper-<set>-<hash> release each paper-<set>-main names) are
+      # fetched and read as inputs.
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}

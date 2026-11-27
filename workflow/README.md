@@ -92,6 +92,22 @@ Settings that are the same on every machine are in `workflow/config.yaml`; overr
 Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
 Each machine reruns its task as releases land, in its coordinator run (`task workflow:run`).
 
+### Endpoint releases
+
+Each key endpoint that other machines or CI read has one stable release, `<endpoint>-main`, whose asset `main.json` names its current version.
+The record holds the version's release `tag`, its `hash`, the `commit` and step that made it (`produced_by`) and `promoted_at`.
+Each version keeps its own hashed release; the pointer only names one.
+
+| Pointer release | Names | Promoted by (target) | Read by |
+|---|---|---|---|
+| `chronos-main` | the main run's (`live_run`) newest released checkpoint, `chronos-slots-<hash>` or `chronos-ft-<hash>` | `promote_main` (`publish`) | the fine-tuned models (`hash = "latest"`), the Fit store, the submission and Site results (`bdbvhub finetuned-checkpoint`) |
+| `paper-synthetic-main`, `paper-finetune-main`, `paper-simulations-main`, `paper-germany-main` | each stored paper set's `paper-<set>-<hash>` | `promote_paper_<set>` (`paper_inputs`) | the Pages paper build (`paperpipe.stored fetch`) |
+
+A promote rule follows the rule that releases its version, so a new version reruns it.
+It promotes only from a commit on one of `promote_branches` (`paper/workflow/config.yaml`), and only a version whose release exists.
+Readers fail when a pointer names no release and never take the newest release of a prefix instead.
+The shared code is `nowcastutils.pointers`.
+
 ## 1. Simulate (`rules/simulate.smk`)
 
 Round r is `batches` batches of `batch` outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
@@ -144,7 +160,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`). It never waits for the checkpoint's held-out losses.
-- `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
+- `promote_main`: with `publish_checkpoint`, the main run's (`live_run` in `paper/workflow/config.yaml`) newest released checkpoint, named in the release `chronos-main` (`main.json`, [Endpoint releases](#endpoint-releases)), which the fine-tuned models load (`<ROOT>/runs/main-release.json`). Ablation runs never touch it.
 - `ft_check_release`: a saved checkpoint's BDBV check page (`ft_check_page`), named by the hash in its settings (`<ck>/ft-check.done`). A fine-tuned checkpoint's BDBV check forecast waits for its release.
 - `release_held_out`: an offloaded checkpoint's held-out losses (`held-out.json`), uploaded to its release once scored (`<ck>/held-out-released.txt`).
 - `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `packages/nowcastfoundation/config/finetune.toml` pins.
@@ -238,7 +254,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.
 - Progress figures: `progress_runa`, `progress_noslots`, `progress_nodelays` and `progress_realdata`, one per paper run (`live_run` and `comparisons` in `paper/workflow/config.yaml`), from the run's `run_progress` and `horizon_table` tables, or on Pages from the stored copies in the `finetune` set.
-- Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, gathered by the opt-in target `paper_inputs`.
+- Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, and `promote_paper_synthetic`, `promote_paper_finetune`, `promote_paper_simulations` and `promote_paper_germany` name it in `paper-<set>-main` ([Endpoint releases](#endpoint-releases)), gathered by the opt-in target `paper_inputs`.
 
 ## A fine-tuning run
 

@@ -57,6 +57,7 @@ from nowcastfoundation.backends.chronos2 import (
     apply_threads,
     torch_device,
 )
+from nowcastutils import pointers
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -167,16 +168,17 @@ FINETUNED_URL: Final = (
 )
 """Where the fine-tuned checkpoints' releases are downloaded from."""
 
-MAIN_TAG: Final = "chronos-main"
+MAIN_TAG: Final = pointers.tag("chronos")
 """The release naming the main fine-tuning run's newest checkpoint, the
 one `"latest"` takes. The main run is the paper's `live_run`
 (paper/workflow/config.yaml); the workflow updates this release each
 time that run publishes a checkpoint (rule `promote_main`), and no other
 run touches it."""
 
-MAIN_FILE: Final = "main.json"
+MAIN_FILE: Final = pointers.ASSET
 """`MAIN_TAG`'s asset: the main run's name and its newest released
-checkpoint's `spec`, `tag`, `hash` and `n_outbreaks`."""
+checkpoint's `spec`, `tag`, `hash` and `n_outbreaks`, with the commit
+that promoted it (`nowcastutils.pointers`)."""
 
 FINETUNED_PREFIX: Final = "chronos-ft"
 """Tag prefix of the simulation-trained checkpoints' releases without
