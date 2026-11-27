@@ -189,7 +189,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - We simulated the data in five layers (Figure 1A; Supporting Information, *Synthetic data generation*).
 - In layer 1 we simulated infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
 - In layer 2 infections became reference events, such as symptom onsets, after a delay such as incubation, and we kept a share of them with negative binomial or Poisson noise.
-- This share, the ascertainment, can change over time, differ between strata and fall when counts are high.
+- This share, the ascertainment, can change over time, differ between strata and change with the number of cases.
 - In layer 3 these events were reported after a reporting delay that is fixed or changes over time, as in epinowcast's observation model.
 - The delay can also differ and change between strata, lengthen or shorten with the number of cases, and vary by week and stratum.
 - In layer 4 we added the reporting system, with report days and weekday effects, half with patterns such as a weekend dip, backlogs, outages, revisions that can take a release above the final count, short bursts of over-reporting that are later withdrawn, and how often data are released.
@@ -228,13 +228,14 @@ Teams without the capacity to set up specialist models could also use them direc
 :::
 
 ![The fine-tuning pipeline.
-(A) The assumptions in the simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
-(B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to the last complete date and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
-Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai's any-variate attention [@Woo2024], while every place's series sit in one group.
-The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
-Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
-(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
-(D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u.](figures/fig1-pipeline.svg){#fig-pipeline}
+(A) The five layers of the simulations: infections, observation, reporting delays, the reporting system, and places and strata (Supporting Information, *Synthetic data generation*).
+(B) The model inputs for a country C and its places A and B in one block.
+Each place has a target, complete up to the last complete date, one series per reporting delay (lag), and a weekly row.
+Lag d is reported up to d days before the latest data, and the lags reported after the last complete date enter as known-future inputs.
+(C) Training blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only the LoRA adapters and the attention biases are trained.
+The attention biases are learned for a series and the other series of its place, of its parent (up) and of its children (down), as in Moirai's any-variate attention [@Woo2024].
+The grid shows group attention at one step, with three series per place.
+(D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u, giving a nowcast up to the latest data and a forecast after it.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Baselines
 
