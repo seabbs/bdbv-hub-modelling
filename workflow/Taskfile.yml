@@ -144,6 +144,23 @@ tasks:
         vars: {WF_TARGET: finetune_realdata}
 
 
+  # The paper's steps, run by hand (never a tick target): its stored
+  # inputs, then the paper in a mode. Each runs as `task paper` does
+  # (workflow/scripts/paper_run.py: niced, logged to PAPER_LOGS).
+  paper-inputs:
+    dir: ..
+    desc: Make and promote the paper's stored inputs (target paper_inputs), each set as a paper-<set>-<hash> release named in paper-<set>-main (writes GitHub releases)
+    cmds:
+      - uv run --group paper python workflow/scripts/paper_run.py --targets paper_inputs {{.CLI_ARGS}}
+
+
+  paper:
+    dir: ..
+    desc: Run the paper workflow in MODE (development by default, or paper, which reads the held-out data) and render the paper from it
+    cmds:
+      - uv run --group paper python workflow/scripts/paper_run.py {{.MODE | default "development"}}
+
+
   publish:
     dir: ..
     desc: Verify and release every finished checkpoint (writes GitHub releases)

@@ -32,6 +32,9 @@ High level, one Taskfile task per target:
 | `task workflow:score` | `score` | score each released checkpoint | no |
 | `task workflow:land` | `land` | commit the score tables to `evidence/` and push | git push |
 | `task paper` | `development` or `paper`, then `render` | the paper (section 7) | no |
+| `task workflow:finetune-realdata` | `finetune_realdata` | the real-data run, scored and released | GitHub releases |
+| `task workflow:paper-inputs` | `paper_inputs` | the paper's stored inputs, released and promoted | GitHub releases |
+| `task workflow:paper MODE=paper` | `development` or `paper`, then `render` | the paper in a mode, as `task paper` | no |
 
 Pass Snakemake options after `--`: `task workflow:score -- -n` is a dry run, and a file path builds just that output.
 Low level, any output file, for example:
