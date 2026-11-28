@@ -64,6 +64,8 @@ def test_the_copula_scores_are_the_ebola_hub_s_in_a_paper_run(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule pairing_ebola:" in out.stdout
     assert "rule coupling_ebola:" in out.stdout
+    assert "rule renewal_variants:" in out.stdout
+    assert "--renewal-variants" in out.stdout
     assert "--si-copula" in out.stdout
     assert "--coupling" in out.stdout
     assert "--copula-rho" in out.stdout
@@ -76,6 +78,7 @@ def test_a_development_run_has_no_copula_scores(tmp_path):
     for rule in (
         "pairing_ebola",
         "coupling_ebola",
+        "renewal_variants",
         "pairing_germany",
         "pairing_synthetic",
     ):
