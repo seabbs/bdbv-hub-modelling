@@ -202,26 +202,27 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Fine-tuning
 
 ::: {.callout-note title="Plan"}
-- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT (@fig-design A).
-- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, *LoRA*).
+- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA (low-rank adaptation) recipe, using PEFT (@fig-design A).
+- Chronos-2 has many weights that are learned from a large pretraining dataset. Updating all of these weights would be very computationally expensive. In contrast, LoRA trains a small update to about 1% of the model's weights rather than retraining them all (Figure 1C; Supporting Information, *LoRA*).
 - We trained on {{< meta results.training.simulations >}} simulations, each drawing its settings from the grid independently.
-- The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
-- The learning rate falls linearly to zero over these simulations.
-- We cut up to 14 training blocks from each simulation.
-- A block is daily, 3-day or weekly.
-- A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
-- In 30% of blocks releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did.
-- 5% of blocks have no lag series, as when only the latest data are at hand.
-- Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.
-- In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
-- Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
+- During training the loss is Chronos-2's quantile loss over the nowcast steps and one week ahead (Supporting Information, *Loss*). This means the fine-tuning focuses on improving the nowcasting task, so the model learns the reporting process simulated in layers 2 to 5 of the synthetic data generation and tries to leave the longer-range forecasting performance of the pretrained model intact.
+- The learning rate falls linearly to zero over these simulations, as in Chronos-2's own fine-tuning [@chronos_forecasting]. This fixes the end of training before it starts, so no validation or real data choose the checkpoint, and the weights settle as the rate reaches zero.
+- We cut up to 32 training blocks of different sizes from each simulated outbreak.
+- We varied the blocks so that during fine-tuning the model sees a range of different reporting formats found in real surveillance data. This may allow the model to learn how to handle different reporting scenarios. The variations include:
+  - Blocks can be daily, 3-day or weekly, reflecting the different time steps found in real surveillance data.
+  - Daily blocks can also have an extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums, allowing the model to learn how to handle different methods of aggregating over time.
+  - In 15% of blocks the releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did. This means the model can learn how to handle situations where reporting starts partway through an outbreak resulting in missing lag values for earlier dates.
+  - 5% of blocks have no lag series, so the model only sees counts up to the last complete date (as when no lagged series are available).
+  - Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series, so the model sees both single and multiple places.
+  - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later. This reflects situations where the sum of individual locations does not equal the national count or may have a different reporting delay.
+  - Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
 - We scored every checkpoint of every fine-tuned model, including those with other attention bias setups and without lag series, on the validation simulations and the German development period, and show these in the Supporting Information (*Checkpoint curve*).
-- At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
-- We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
+- At each checkpoint we monitored whether the 7-day rolling sum forecasts agree with the sums of the daily forecasts, and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*). If they were rough, this would imply that the model is forecasting a weekday pattern that cannot be true for a rolling forecast.
+- We report the final checkpoint, where the learning rate reaches zero, not the checkpoint with the best validation score.
 - Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, *Fitting in GPU memory*).
-- We cut a set of places too large for one block into views, in training and at forecast time alike.
-- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (Supporting Information, *Fitting in GPU memory*).
+- Each block can hold up to 1,000 series. If a set of places exceeds this limit then the block is split into views, in training and at forecast time alike.
+- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces. Places in different views cannot inform each other except through aggregated totals (Supporting Information, *Fitting in GPU memory*).
 - Figure 1 shows the simulation, the model inputs, fine-tuning and forecasting.
 - TODO: replace the Supporting Information's dashboard screenshot with a static render of the finished run from the workflow.
 - Key references: [@Ansari2025; @Hu2021; @Das2024b].
@@ -352,6 +353,7 @@ Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig
 - Zero-shot, this is how the Ebola hub teams that use foundation models use them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development period and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
+- The real data are finite, so we trained over repeated passes through them, as many as give the simulated fine-tune's number of training steps up to 20, with the learning rate falling linearly to zero and the final checkpoint reported as for the simulated fine-tune.
 - Besides the main model, which has all three attention biases, we fine-tuned models with no biases, with the same-place bias only, and with the parent and child biases only.
 - We also fine-tuned one model without lag series.
 - For the Ebola hub only, we compared the random walk nowcast's rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
