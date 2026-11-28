@@ -38,15 +38,16 @@ promote_branches: [main, next]
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
 # until its run has a scored checkpoint. The attention bias subsets
-# (`evidence.BIAS_SUBSETS`) join the no-biases comparison. `realdata` is
-# Chronos-2 fine-tuned on real data alone (`foundation_real`), with no
-# simulations, drawn as its final checkpoint across the live run's.
+# (`evidence.BIAS_SUBSETS`) join the no-biases comparison.
 comparisons:
   nobiases: nobiases
   sameplace: sameplace
   parentchild: parentchild
   nodelays: nodelays
-  realdata: realdata
+# Further runs with an SI progress figure but no comparison. `realdata`
+# (`foundation_real`) trains on the German development half, so it is
+# quoted from its held-out scores alone (rule real_finetune).
+progress: [realdata]
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 

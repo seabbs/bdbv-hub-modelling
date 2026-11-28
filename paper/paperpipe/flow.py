@@ -350,11 +350,12 @@ class PaperFlow:
     def progress_runs(self) -> list[str]:
         """Return the runs with a progress figure.
 
-        The live run and each comparison's run.
+        The live run, each comparison's run and each run of `progress`.
         """
         runs = [
             self.config.get("live_run"),
             *(self.config.get("comparisons") or {}).values(),
+            *(self.config.get("progress") or []),
         ]
         return list(dict.fromkeys(r for r in runs if r))
 

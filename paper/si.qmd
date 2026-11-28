@@ -1121,11 +1121,9 @@ German nowcast hub, daily counts: the score panels of the German results figure,
 - Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
 - It saw the German development period, so we score it on the test period only.
 - Both use the same recipe and the reporting-triangle layout.
-- @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
+- @tbl-real-finetune gives the scores.
 - @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-finetuned.
 - We leave the real-data model out of every other table and figure.
-
-![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
 
 ![Progress of the real-data run (`realdata`) over its checkpoints, in the panels of @fig-progress-finetuned. Its German development scores are on data it trained on. Development data only.](build/figures/si/progress-realdata.png){#fig-progress-realdata}
 

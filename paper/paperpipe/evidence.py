@@ -134,15 +134,12 @@ COMPARISONS: Final = {
         "the fine-tuned and no delay information runs' scores by checkpoint",
         ("Fine-tuned", "No delay information"),
     ),
-    # The workflow's `realdata` run: real data alone (`foundation_real`).
-    "realdata": (
-        "the real-data and fine-tuned models' scores",
-        ("Fine-tuned", "Real data"),
-    ),
 }
 """Each fine-tuning comparison of the live run with a variant: what it
 waits on until the variant is scored, and the two runs' labels. The
-variant is named by its workflow run (the paper config's `comparisons`)."""
+variant is named by its workflow run (the paper config's `comparisons`).
+The real-data run is none: it trains on the German development half, so
+it is quoted from its held-out scores alone (`outputs.real_finetune_table`)."""
 
 BIAS_SUBSETS: Final = {
     "sameplace": "Same place only",
@@ -931,7 +928,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("nobiases", "nodelays", "realdata", "daily"):
+    for name in ("nobiases", "nodelays", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",
