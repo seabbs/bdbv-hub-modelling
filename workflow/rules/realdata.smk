@@ -66,7 +66,7 @@ rule realdata_blocks_bdbv:
         data=lambda wc, input: Path(input[0]).parent,
         block_limit=local_or_ft("BLOCK_LIMIT", "block_limit"),
     shell:
-        "uv run python -m nowcastbdbv.finetune_blocks {params.data} {output} "
+        "uv run python -m bdbvhub.finetune_blocks {params.data} {output} "
         "--block-limit {params.block_limit} > {log} 2>&1"
 
 

@@ -4,7 +4,7 @@
 The workflow's `realdata` run (workflow/config.yaml `runs`, `data:
 real`). It trains a LoRA adapter from base Chronos-2 on the German and
 BDBV real-data blocks (`nowcastgermany.finetune_blocks --realdata`,
-`nowcastbdbv.finetune_blocks`) with the simulation fine-tune's recipe
+`bdbvhub.finetune_blocks`) with the simulation fine-tune's recipe
 (`finetune.stream`: its LoRA, series bias, optimiser and batches packed
 by size). It trains in passes over every training block, each pass
 shuffled with its own seed, with the learning rate falling linearly to
@@ -65,7 +65,7 @@ CODE = (
     "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     "packages/nowcastfoundation/src/nowcastfoundation/finetune/realtasks.py",
     "packages/nowcastgermany/src/nowcastgermany/finetune_blocks.py",
-    "packages/nowcastbdbv/src/nowcastbdbv/finetune_blocks.py",
+    "packages/bdbvhub/src/bdbvhub/finetune_blocks.py",
     "packages/nowcastfoundation/config/finetune.toml",
 )
 """Files a checkpoint depends on, hashed into its settings by path: the

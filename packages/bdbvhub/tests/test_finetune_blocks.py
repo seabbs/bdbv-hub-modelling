@@ -1,13 +1,16 @@
 """The BDBV real-data training blocks of the real-only checkpoint."""
 
 import tomllib
+from pathlib import Path
 
 import numpy as np
 import pytest
-from bdbv_cases import FIXTURE_DATA, ROOT
 
-from nowcastbdbv import finetune_blocks as fb
+from bdbvhub import finetune_blocks as fb
 from nowcastfoundation.finetune.stream import BLOCK_KEYS
+
+ROOT = Path(__file__).resolve().parents[3]
+FIXTURE_DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 def _config() -> dict:
