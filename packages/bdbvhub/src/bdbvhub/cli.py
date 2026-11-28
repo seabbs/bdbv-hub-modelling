@@ -127,7 +127,7 @@ from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
 
-__all__ = ["build_parser", "chunk", "host_devices", "main"]
+__all__ = ["build_parser", "chunk", "host_devices", "main", "paper_backtest"]
 
 _ABBR_HELP = (
     "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
@@ -799,7 +799,31 @@ def _models(names: Sequence[str] | None) -> list[str]:
     return [s.name for s in list_models() if not s.paper_only]
 
 
-def _backtest(args: argparse.Namespace) -> int:
+def paper_backtest(argv: Sequence[str]) -> int:
+    """Run the paper's own release backtest of the models it names.
+
+    The `backtest` command's options, but every named stored model that
+    fits (not a walk, `store.SAMPLE_FREE`) is run here instead of read
+    from the fit store, as the paper runs `foundation` from its final run's
+    checkpoint in every study (`paper/scripts/ebola_backtest.py`). The
+    submission's `backtest` command still leaves them to the store.
+
+    Parameters
+    ----------
+    argv : sequence of str
+        The `backtest` command's arguments.
+
+    Returns
+    -------
+    int
+        The exit code.
+    """
+    args = build_parser().parse_args(["backtest", *argv])
+    names = _models(args.models)
+    return _backtest(args, [n for n in names if n not in store.SAMPLE_FREE])
+
+
+def _backtest(args: argparse.Namespace, run_here: Sequence[str] = ()) -> int:
     from nowcastrenewal.forecaster import sampler_settings
 
     config = bt.load_config(args.config)
@@ -813,8 +837,10 @@ def _backtest(args: argparse.Namespace) -> int:
     # from here. To make one locally, run `fit-store fit --model M
     # --origin D` for each origin, then `fit-store load`. The walks
     # (`store.SAMPLE_FREE`) still forecast each release's snapshots here,
-    # which the store does not hold.
+    # which the store does not hold. `run_here` (the paper's backtest,
+    # `paper_backtest`) runs stored models here all the same.
     stored = set() if args.lopo else set(store.stored_models())
+    stored -= set(run_here)
     names = [n for n in names if n not in stored or n in store.SAMPLE_FREE]
     if not names:
         print(

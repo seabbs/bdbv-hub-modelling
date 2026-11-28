@@ -17,6 +17,12 @@ studies: [synthetic, germany, ebola]
 # rule that runs one, so a new final checkpoint reruns them. Null leaves
 # the run out and the fine-tuned forecasts pending.
 final_run: $ROOT/runs/finetuned
+# The real-data run (the workflow's `runs.realdata`) under the machine's
+# ROOT. `foundation_real` loads its final checkpoint, whose release
+# record is an input of the German held-out and Ebola backtest rules
+# (BDBV_CHRONOS_REAL). Null leaves it to the `realdata` pin in
+# packages/nowcastfoundation/config/finetune.toml, if any.
+realdata_run: $ROOT/runs/realdata
 # The fine-tuning runs' folder under the machine's ROOT (the workflow's
 # runs): each run in `live_run` and `comparisons` has an SI progress figure
 # from its own reports (rule progress_<run>). Null leaves them out.
@@ -108,7 +114,7 @@ germany:
   extra: []
 
 # The Ebola study: samples of the release backtest of `backtest_models`
-# from every past release, with the stored fits' (`bdbvhub
+# from every past release, with the site backtest's (`bdbvhub
 # backtest`, after `fit-store load` on CI), the hub's releases, and once
 # the hub's baseline has a forecast with known truth, every team's
 # forecasts from the hub, our submissions among them, and our unsubmitted
@@ -123,16 +129,19 @@ ebola:
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
-  # The walks and the paper-only Chronos-2 models, as in the other
-  # studies. The fine-tuned ragged model (`foundation`) is a stored model,
-  # so its forecasts are the fit store's in `backtest`, not run here.
+  # The walks and the Chronos-2 models, as in the other studies. The
+  # fine-tuned ragged model (`foundation`) runs here from the final run's
+  # final checkpoint, not from the fit store, and `foundation_real` from
+  # the real-data run's, scored only after its last training release.
   backtest_models:
     - randomwalk
     - randomwalknowcast
     - foundation_zeroshot_complete
     - foundation_zeroshot
+    - foundation
     - foundation_zeroshot_baselinenowcast
     - foundation_baselinenowcast
+    - foundation_real
   # Draws per forecast of the paper's own run of `backtest_models`, with
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.

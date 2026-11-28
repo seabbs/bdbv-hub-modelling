@@ -40,7 +40,8 @@ active_zone_recent_weeks = 4
 # `foundation_real` model loads: the settings hash of the release
 # `realdata-ft-<hash>`, which the workflow's `realdata` run publishes
 # (`task workflow:finetune-realdata`). Empty until that release is
-# published.
+# published. The paper's workflow pins the run's final checkpoint itself
+# (BDBV_CHRONOS_REAL), which overrides this.
 realdata = ""
 
 # The German data the real-data checkpoint trained on

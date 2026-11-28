@@ -48,6 +48,10 @@ R = FLOW.results
 # while the fine-tuned models are pending.
 FINETUNED = FLOW.finetuned_inputs()
 FT_EXPORT = f"export {FLOW.finetuned_env()};" if FINETUNED else ""
+# The real-data run's final checkpoint, which `foundation_real` loads
+# (`PaperFlow.realdata_env`) in the German held-out and Ebola rules.
+REALDATA = FLOW.realdata_inputs()
+REAL_EXPORT = f"export {FLOW.realdata_env()};" if REALDATA else ""
 
 
 BUILD = FLOW.build

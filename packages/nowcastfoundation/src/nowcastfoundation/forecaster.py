@@ -92,6 +92,7 @@ __all__ = [
     "MAIN_TAG",
     "MAX_LAG",
     "PERIODS",
+    "REALDATA_ENV",
     "REALDATA_PREFIX",
     "SLOTS_PREFIX",
     "SLOTS_RELEASE_PREFIX",
@@ -116,6 +117,8 @@ __all__ = [
     "main_release",
     "native_sampler",
     "prefetch",
+    "realdata_available",
+    "realdata_checkpoint",
     "realdata_pinned",
     "realdata_spec",
     "register_realdata_models",
@@ -192,6 +195,12 @@ REALDATA_PREFIX: Final = "realdata-ft"
 FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
 """Environment variable with the settings hash a run resolved once, which
 then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
+
+REALDATA_ENV: Final = "BDBV_CHRONOS_REAL"
+"""Environment variable with the real-data checkpoint a run resolved once,
+a segment folder or a settings hash, which then overrides `realdata` in
+`FINETUNED_CONFIG` (`realdata_checkpoint`), as `FINETUNED_ENV` does for
+the simulation-trained checkpoint."""
 
 SUMS_FILE: Final = "sha256sums.txt"
 """A checkpoint release's asset with the SHA-256 of its other assets."""
@@ -747,13 +756,30 @@ def _finetuned(
     return _zeroshot(name, layout, baselinenowcast, finetuned_checkpoint())
 
 
+def realdata_checkpoint() -> Checkpoint:
+    """Return the real-data checkpoint `foundation_real` loads.
+
+    `REALDATA_ENV`, when set, is a segment folder, read in place as its
+    `realdata-ft-<hash>` release, or a settings hash; else the release
+    `realdata` in `FINETUNED_CONFIG` pins (`realdata_spec`).
+
+    Returns
+    -------
+    Checkpoint
+    """
+    pinned = os.environ.get(REALDATA_ENV, "")
+    if pinned and Path(pinned).is_dir():
+        local = local_checkpoint(pinned)
+        settings = json.loads((Path(pinned) / "settings.json").read_text())
+        return Checkpoint(
+            str(settings["hash"]), local.sha256, REALDATA_PREFIX, local.path
+        )
+    return resolve_checkpoint(pinned or realdata_spec(), REALDATA_PREFIX)
+
+
 def _real_data(name: str) -> FoundationModel:
-    """Build a model with the real-data checkpoint `realdata_spec`."""
-    return _zeroshot(
-        name,
-        "ragged",
-        checkpoint=resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
-    )
+    """Build a model with the real-data checkpoint `realdata_checkpoint`."""
+    return _zeroshot(name, "ragged", checkpoint=realdata_checkpoint())
 
 
 Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
@@ -2541,11 +2567,26 @@ def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
     return bool(tomllib.loads(Path(path).read_text()).get("realdata"))
 
 
+def realdata_available(path: Path | str = FINETUNED_CONFIG) -> bool:
+    """Whether a real-data checkpoint is pinned, by `REALDATA_ENV` or `path`.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `realdata`.
+
+    Returns
+    -------
+    bool
+    """
+    return bool(os.environ.get(REALDATA_ENV)) or realdata_pinned(path)
+
+
 def register_realdata_models() -> None:
     """Register `foundation_real`, fine-tuned on real data alone.
 
-    The module registers them only once `realdata_pinned`, so while the
-    pin is pending no store plan or backtest resolves their checkpoint.
+    The module registers them only once `realdata_available`, so while
+    no checkpoint is pinned no store plan or backtest resolves theirs.
     """
     register_model(
         "foundation_real",
@@ -2558,5 +2599,5 @@ def register_realdata_models() -> None:
     )
 
 
-if Path(FINETUNED_CONFIG).exists() and realdata_pinned():
+if Path(FINETUNED_CONFIG).exists() and realdata_available():
     register_realdata_models()

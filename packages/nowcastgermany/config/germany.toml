@@ -64,8 +64,9 @@ models = [
 # Chronos-2 fine-tuned on real data alone (the German development half and
 # BDBV to date), run on the held-out half only, for the SI's comparison
 # with the models fine-tuned on simulations. Its checkpoint is released as
-# realdata-ft-<hash> and pinned by `realdata` in packages/nowcastfoundation/config/finetune.toml; the
-# model is registered only once that pin is set (it is empty), and the
+# realdata-ft-<hash> and pinned by `realdata` in packages/nowcastfoundation/config/finetune.toml,
+# or by BDBV_CHRONOS_REAL, which the paper's workflow sets to the run's
+# final checkpoint; the model is registered only once one is set, and the
 # workflow's `realdata` run trains it (workflow/config.yaml `runs`).
 held_out_models = [
   "foundation_real",

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from nowcastfoundation.forecaster import FINETUNED_ENV
+from nowcastfoundation.forecaster import FINETUNED_ENV, REALDATA_ENV
 from nowcastgermany.checkpoint import GERMANY_UNIT, REFERENCE
 
 from paperpipe.config import run_settings, run_studies
@@ -38,6 +38,9 @@ __all__ = [
     "PaperFlow",
     "Wildcards",
 ]
+
+REAL_MODEL: Final = "foundation_real"
+"""Chronos-2 fine-tuned on real data alone, from the real-data run."""
 
 HELD_OUT_INCLUDES: Final = (
     ("main", "scores"),
@@ -62,13 +65,13 @@ class Wildcards(Protocol):
     study: str
 
 
-def _prefixes(config: Mapping[str, Any]) -> list[int]:
-    """Return the final run's checkpoint prefixes.
+def _prefixes(config: Mapping[str, Any], key: str = "final_run") -> list[int]:
+    """Return the checkpoint prefixes of the run folder `config[key]`.
 
     The run's own `prefixes` in the workflow's `runs`, else `finetune`'s,
-    which they are with no final run.
+    which they are with no such run.
     """
-    name = Path(config["final_run"]).name if config.get("final_run") else ""
+    name = Path(config[key]).name if config.get(key) else ""
     entry = (config.get("runs") or {}).get(name) or {}
     return [
         int(n) for n in entry.get("prefixes") or config["finetune"]["prefixes"]
@@ -159,7 +162,7 @@ class PaperFlow:
             for mode, folder in synthetic["simulations"].items()
         }
         # Null leaves the run or rounds out, and what reads them pending.
-        for key in ("final_run", "rounds_dir", "runs_dir"):
+        for key in ("final_run", "realdata_run", "rounds_dir", "runs_dir"):
             if config.get(key):
                 config[key] = expand(config[key])
         germany["units"] = expand(germany["units"])
@@ -169,6 +172,13 @@ class PaperFlow:
             f"{config['final_run']}/train/n{_final_prefix(config)}"
             "/published.json"
             if config.get("final_run")
+            else None
+        )
+        # `foundation_real` loads the real-data run's final checkpoint.
+        config["realdata_record"] = (
+            f"{config['realdata_run']}/train/"
+            f"n{_prefixes(config, 'realdata_run')[-1]}/published.json"
+            if config.get("realdata_run")
             else None
         )
         with (
@@ -490,20 +500,52 @@ class PaperFlow:
             return ""
         return f"{FINETUNED_ENV}={Path(record).parent}"
 
+    def realdata_inputs(self) -> list[str]:
+        """Return the real-data run's final release record, if there is one.
+
+        An input of each rule that runs `foundation_real`.
+        """
+        record = self.config.get("realdata_record")
+        return [record] if record else []
+
+    def realdata_env(self) -> str:
+        """Return the environment setting that loads the real-data checkpoint.
+
+        Its segment folder as `BDBV_CHRONOS_REAL`, which registers and
+        loads `foundation_real`; empty while it is pending, when the
+        pin in `finetune.toml` (`realdata`) is used, if any.
+        """
+        record = self.config.get("realdata_record")
+        if not record:
+            return ""
+        return f"{REALDATA_ENV}={Path(record).parent}"
+
     def ebola_draws_models(self) -> list[str]:
         """Return the models the paper's own Ebola backtest runs.
 
         `backtest_models`, less the fine-tuned ones while the final run
-        has no checkpoint, as for the synthetic runner. `foundation` is
-        not among them: it is a stored model, so `bdbvhub backtest` never
-        runs it and its forecasts are the fit store's.
+        has no checkpoint, as for the synthetic runner, and less
+        `foundation_real` while the real-data run has none. `foundation`
+        is run there too (`ebola_draws_command`), not read from the fit
+        store.
         """
-        models = list(self.ebola["backtest_models"])
-        if self.config.get("finetuned_record"):
-            return models
         from nowcasteval.labels import FINETUNED
 
-        return [m for m in models if m not in FINETUNED]
+        models = list(self.ebola["backtest_models"])
+        if not self.config.get("finetuned_record"):
+            models = [m for m in models if m not in FINETUNED]
+        if not self.config.get("realdata_record"):
+            models = [m for m in models if m != REAL_MODEL]
+        return models
+
+    def ebola_draws_command(self) -> str:
+        """Return the command of the paper's own Ebola backtest.
+
+        `bdbvhub backtest`'s options, run by `paper/scripts/ebola_backtest.py`
+        (`bdbvhub.cli.paper_backtest`), which runs the stored fine-tuned
+        model itself.
+        """
+        return f"{PYTHON} paper/scripts/ebola_backtest.py"
 
     def ebola_site_models(self) -> list[str]:
         """Return the models the site's release backtest file is made with.
@@ -514,7 +556,7 @@ class PaperFlow:
         """
         from nowcasteval.labels import FINETUNED
 
-        chronos = {*FINETUNED, *FINETUNED.values()}
+        chronos = {*FINETUNED, *FINETUNED.values(), REAL_MODEL}
         return [m for m in self.ebola["backtest_models"] if m not in chronos]
 
     def synthetic_models_arg(self) -> str:

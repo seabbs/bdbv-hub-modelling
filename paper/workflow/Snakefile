@@ -243,6 +243,7 @@ rule germany_heldout:
     input:
         TRIANGLE,
         FINETUNED,
+        REALDATA,
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
@@ -257,13 +258,14 @@ rule germany_heldout:
     params:
         env=FORECAST.env,
         ft=FT_EXPORT,
+        real=REAL_EXPORT,
         germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
-        "exec >{log} 2>&1; {params.ft} {params.env} "
+        "exec >{log} 2>&1; {params.ft} {params.real} {params.env} "
         "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.germany} teams {params.args} --held-out --out {params.out} && "
@@ -326,13 +328,15 @@ if FLOW.round_releases():
             "--out {output} && rm -rf {params.tmp}"
 
 
-# The paper's own release backtest of the walks and the paper-only
-# Chronos-2 models, the fine-tuned ones loading the final checkpoint as in
-# the other studies. `foundation` is the fit store's, in EBOLA["backtest"].
+# The paper's own release backtest of the walks and the Chronos-2 models,
+# the fine-tuned ones loading the final checkpoint as in the other
+# studies (`foundation` too, not the fit store's) and `foundation_real`
+# the real-data run's.
 rule ebola_backtest_draws:
     input:
         f"{EBOLA['data']}/target.csv",
         FINETUNED,
+        REALDATA,
     output:
         EBOLA_DRAWS,
     log:
@@ -348,14 +352,15 @@ rule ebola_backtest_draws:
     params:
         env=FORECAST.env,
         ft=FT_EXPORT,
-        bdbv=BDBV,
+        real=REAL_EXPORT,
+        backtest=FLOW.ebola_draws_command(),
         models=" ".join(FLOW.ebola_draws_models()),
         n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
         "exec >{log} 2>&1; mkdir -p {params.folder} && "
-        "{params.ft} {params.env} {params.bdbv} backtest --config {params.config} --samples {params.n} "
+        "{params.ft} {params.real} {params.env} {params.backtest} --config {params.config} --samples {params.n} "
         "--models {params.models} "
         "--results {params.folder}/results --output {params.folder}"
 

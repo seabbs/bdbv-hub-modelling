@@ -1128,23 +1128,23 @@ def test_the_paper_backtest_runs_stored_models_itself(
     assert "foundation" in stored_models()
     ran: list[str] = []
 
-    class Ran(Exception):
+    class RanError(Exception):
         pass
 
-    def run(origins, *args, **kwargs):
+    def run(origins, *_args, **_kwargs):
         ran.extend(m.name for m in origins)
-        raise Ran
+        raise RanError
 
     monkeypatch.setattr(cli.bdbv_bt, "run_development", run)
     monkeypatch.setattr(cli, "get_model", lambda n: type("M", (), {"name": n}))
     args = ["--data", str(DATA), "--models", "randomwalk", "foundation"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    with pytest.raises(Ran):
+    with pytest.raises(RanError):
         cli.paper_backtest([*args, *out])
     # The walks still forecast each release's snapshots alone.
     assert ran == ["foundation"]
     # The submission's command line still leaves it to the store.
     ran.clear()
-    with pytest.raises(Ran):
+    with pytest.raises(RanError):
         main(["backtest", *args, *out])
     assert ran == []
