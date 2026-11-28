@@ -60,9 +60,9 @@ def test_one_target_cuts_trains_scores_and_publishes(tmp_path):
     # The final checkpoint is verified and released as realdata-ft.
     assert jobs["verify_checkpoint"] == 1
     assert jobs["publish_checkpoint"] == 1
-    # No simulations.
-    for rule in ("train_segment", "fetch_batch", "simulate_batch"):
-        assert rule not in jobs
+    # No simulations of its own: any are the fine-tuned run's, whose
+    # final checkpoint sets its steps
+    # (test_the_real_run_trains_after_the_fine_tuned_run).
 
 
 def test_the_trainer_resumes_each_checkpoint_from_the_one_before(tmp_path):
@@ -86,9 +86,7 @@ def test_the_real_run_takes_its_steps_from_the_fine_tuned_run():
     _, found = _found()
     real = found["realdata"]
     assert real.ft["steps_from"] == "finetuned"
-    assert runs.steps_source(real, found) == _final_settings(
-        found["finetuned"]
-    )
+    assert runs.steps_source(real, found) == _final_settings(found["finetuned"])
 
 
 def test_the_real_steps_are_the_final_checkpoint_s_when_present(tmp_path):
@@ -113,3 +111,6 @@ def test_the_real_run_trains_after_the_fine_tuned_run(tmp_path):
     shells = [j["shell"] for j in _jobs_of(out, "train_real")]
     assert shells
     assert all(final in s for s in shells)
+    segments = _jobs_of(out, "train_segment")
+    assert segments
+    assert all("run=finetuned" in j["wildcards"] for j in segments)

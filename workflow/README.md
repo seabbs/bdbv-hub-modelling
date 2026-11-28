@@ -162,7 +162,8 @@ A run with `data: real` trains on real data alone, with no simulations: the `rea
 It is not `finetune.real_training`, which mixes German blocks into a run's simulations (`real_training_blocks` above).
 Its recipe is the fine-tuned model's, and only the data differ.
 Its blocks are each study's forecast tasks laid out as the fine-tuned model forecasts them (`nowcastfoundation.finetune.realtasks`): the daily releases with each place's 7-day rows and lag series, with lags 0 to the study's maximum delay (40 days for Germany, 42 for Ebola), scaled in 10% of blocks by Normal(1, 0.05).
-It trains with the attention biases in passes over every block, the learning rate falling to zero over them, as many passes as give the fine-tuned run's steps (`target_steps`, still the old `runa` run's 82,040 until the retrained `finetuned` run's final checkpoint lands), at most 20.
+It trains with the attention biases in passes over every block, the learning rate falling to zero over them, as many passes as give the fine-tuned run's steps, at most 20.
+The steps are read from the final checkpoint of the run `steps_from` names (`finetuned`), an input of every real checkpoint, so the run trains after it; `target_steps` is used only while that checkpoint is missing.
 Its prefixes are thousandths of the whole training (1/8, 1/4, 1/2 and all), and the final checkpoint is the one reported.
 
 - `realdata_blocks_germany`: the German triangle as available on the last day of the development half (2022-02-09), changes after 80 days left out. Each nowcast date whose truth is at least 40 days old by then (2021-04-20 to 2021-12-03) gives its two German tasks (Germany with its states, Germany with its age groups), as the benchmark builds them (`nowcastgermany.finetune_blocks --realdata`, `<run>/real/germany.pkl`). The window is `[realdata_germany]` in `packages/nowcastfoundation/config/finetune.toml`.

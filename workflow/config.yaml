@@ -170,11 +170,12 @@ runs:
   # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
   # "Fine-tuning on real data"): the recipe, layout and attention biases
   # on the German development half and the BDBV releases. It trains in
-  # passes to the fine-tuned model's steps (`target_steps`, still the old
-  # main run's final 82,040 until the retrained `finetuned` run's final
-  # checkpoint lands), at most 20 passes, with checkpoints at 1/8, 1/4,
-  # 1/2 and all of them; the final one is reported, with no choice on
-  # real data. Its final checkpoint is released as realdata-ft-<hash>,
+  # passes to the fine-tuned model's steps: those of the final checkpoint
+  # of the run `steps_from` names, an input of each checkpoint, so it
+  # trains after that run (`target_steps`, the old main run's final
+  # 82,040, only while that checkpoint is missing), at most 20 passes,
+  # with checkpoints at 1/8, 1/4, 1/2 and all of them; the final one is
+  # reported, with no choice on real data. Its final checkpoint is released as realdata-ft-<hash>,
   # which `realdata` in packages/nowcastfoundation/config/finetune.toml
   # pins. One target cuts, trains, scores and publishes it:
   # `task workflow:finetune-realdata` (rule finetune_realdata). Not in
@@ -182,6 +183,7 @@ runs:
   realdata:
     data: real
     prefixes: [125, 250, 500, 1000]
+    steps_from: finetuned
     target_steps: 82040
     max_passes: 20
     eval: local

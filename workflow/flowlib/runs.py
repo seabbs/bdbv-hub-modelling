@@ -10,6 +10,7 @@ shared by every run (`<ROOT>/rounds/r<N>/`).
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,6 +106,12 @@ def resolve(
             segments.check_chunks(ft["prefixes"], ft["chunk"], ft["outbreaks"])
         segments.check_eval(ft["eval"])
         out[name] = run
+    for name, run in out.items():
+        source = run.ft.get("steps_from")
+        if source and source not in out:
+            raise ValueError(
+                f"run {name} takes its steps from {source}, not in `runs`"
+            )
     return out
 
 
@@ -145,12 +152,38 @@ def real_blocks(run: Run) -> dict[str, str]:
     }
 
 
-def real_trainer_options(run: Run) -> str:
+def steps_source(run: Run, found: Mapping[str, Run]) -> str | None:
+    """Return the settings of the checkpoint a real run's steps come from.
+
+    The final checkpoint of the run `steps_from` names, so the real run
+    trains as many steps as it; None without `steps_from`.
+    """
+    name = run.ft.get("steps_from")
+    if not name:
+        return None
+    there = found[name]
+    return f"{there.train}/n{max(there.ft['prefixes'])}/settings.json"
+
+
+def target_steps(run: Run, settings: str | None = None) -> int | None:
+    """Return the steps a real run's passes aim at.
+
+    The `steps` of `settings` (`steps_source`) once that checkpoint is
+    trained, else the run's `target_steps`.
+    """
+    if settings and Path(settings).exists():
+        return int(json.loads(Path(settings).read_text())["steps"])
+    value = run.ft.get("target_steps")
+    return None if value is None else int(value)
+
+
+def real_trainer_options(run: Run, settings: str | None = None) -> str:
     """Return a real run's `finetune-real` options from its recipe.
 
     Its checkpoints (`prefixes`, thousandths of the whole training), the
     series bias and its rate, the learning rate, batch size, and the steps
-    its passes aim at and their cap.
+    its passes aim at (`target_steps`, from `settings` when trained) and
+    their cap.
     """
     f = run.ft
     bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
@@ -162,7 +195,7 @@ def real_trainer_options(run: Run) -> str:
             bias,
             f"--learning-rate {f['learning_rate']}",
             f"--batch-size {f['batch_size']}",
-            option("--target-steps", f.get("target_steps")),
+            option("--target-steps", target_steps(run, settings)),
             option("--max-passes", f.get("max_passes")),
         )
         if a

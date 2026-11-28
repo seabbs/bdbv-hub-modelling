@@ -80,6 +80,7 @@ $defs:
       real_training: {enum: [null, germany]}
       data: {enum: [simulations, real]}
       target_steps: {$ref: "#/$defs/positive"}
+      steps_from: {type: string}
       max_passes: {$ref: "#/$defs/positive"}
       note: {type: string}
       check_at: {$ref: "#/$defs/positive"}

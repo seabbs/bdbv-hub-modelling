@@ -323,11 +323,15 @@ class Training:
     def real_inputs(self, wc: Any) -> dict[str, Any]:
         """Return a real run's checkpoint's blocks and the one before.
 
-        Its own run's block files (`runs.real_blocks`) and, after the
-        first, the previous checkpoint, whose state it resumes from.
+        Its own run's block files (`runs.real_blocks`), the final
+        checkpoint whose steps it aims at (`runs.steps_source`), so it
+        trains after that run, and, after the first, the previous
+        checkpoint, whose state it resumes from.
         """
         run, n = self.runs[wc.run], int(wc.n)
         out: dict[str, Any] = dict(runs.real_blocks(run))
+        if steps := runs.steps_source(run, self.runs):
+            out["steps"] = steps
         if run.prev[n] is not None:
             out["prev"] = f"{run.train}/n{run.prev[n]}/settings.json"
         return out

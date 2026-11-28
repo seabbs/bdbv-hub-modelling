@@ -97,7 +97,11 @@ rule train_real:
             if input.get("prev")
             else ""
         ),
-        options=lambda wc: runs.real_trainer_options(run_of(wc)),
+        # Its passes aim at the steps of the checkpoint `steps_from`
+        # names, read once it is trained (an input), else `target_steps`.
+        options=lambda wc, input: runs.real_trainer_options(
+            run_of(wc), input.get("steps")
+        ),
         checkpoint=local_or_ft("CHECKPOINT_ABOVE", "checkpoint_above"),
         note=ft("note"),
         device=machine.device(LOCAL),
