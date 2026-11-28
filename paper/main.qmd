@@ -207,7 +207,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - We trained on {{< meta results.training.simulations >}} simulations, each drawing its settings from the grid independently.
 - The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
 - The learning rate falls linearly to zero over these simulations.
-- We cut up to 14 training blocks from each simulation.
+- We cut up to 32 training blocks from each simulation.
 - A block is daily, 3-day or weekly.
 - A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
 - In 15% of blocks releases start late.

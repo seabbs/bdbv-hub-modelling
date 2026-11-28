@@ -342,7 +342,7 @@ The releases before the start are dropped, so the first kept release fills in th
 Lag series start at that release, and the counts keep the whole history.
 In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
 Release starts, cadences and blocks without lag series are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
-Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at random within each of 14 equal stretches of its weekly cut-offs, so one simulation gives up to 14 blocks.
+Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
 Each day counts once, at its latest report, in the block's busiest level.
@@ -396,7 +396,7 @@ The realised shares of the combinations of layout and options in the training bl
 **Order of the training data.**
 Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
 Training takes the simulations in order, in chunks.
-Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
+Each simulation gives up to 32 training blocks, which are shuffled within a chunk and packed into steps.
 Each step is filled until it holds 256 series or more, so one large block can make a step on its own.
 
 #### Fitting in GPU memory
