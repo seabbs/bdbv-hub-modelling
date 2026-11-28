@@ -229,12 +229,14 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ![The fine-tuning pipeline.
 (A) The five layers of the simulations: infections, observation, reporting delays, the reporting system, and places and strata (Supporting Information, *Synthetic data generation*).
-(B) The model inputs for a country C and its places A and B in one block.
+(B) The model inputs for a country C and its places A and B in one block, each place in its own colour.
 Each place has a target, complete up to the last complete date, one series per reporting delay (lag), and a weekly row.
 Lag d is reported up to d days before the latest data, and the lags reported after the last complete date enter as known-future inputs.
 (C) Training blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only the LoRA adapters and the attention biases are trained.
 The attention biases are learned for a series and the other series of its place, of its parent (up) and of its children (down), as in Moirai's any-variate attention [@Woo2024].
-The grid shows group attention at one step, with three series per place.
+The grid shows group attention at one step, rows attending to columns, for each place's target and two lag series.
+A series has no bias to itself.
+Each relation has one learned bias per layer and head, added to the attention scores.
 (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u, giving a nowcast up to the latest data and a forecast after it.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Baselines
