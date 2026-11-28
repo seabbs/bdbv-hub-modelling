@@ -1,7 +1,7 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Fine-tune Chronos-2 on real data alone, for `foundation_real`.
 
-The workflow's `realonly` run (workflow/config.yaml `runs`, `data:
+The workflow's `realdata` run (workflow/config.yaml `runs`, `data:
 real`). It trains a LoRA adapter from base Chronos-2 on the German and
 BDBV real-data blocks (`nowcastgermany.finetune_blocks --realdata`,
 `nowcastbdbv.finetune_blocks`) with the simulation fine-tune's recipe
@@ -74,8 +74,9 @@ and the real-data blocks' layout, the block cutters and the real-data
 cut (`[realdata_germany]`, `[realdata_bdbv]`)."""
 
 TARGET_STEPS = 82040
-"""The main run's (Run A's) steps over its 4,800 simulations: its final
-checkpoint's settings (`chronos-slots-66a7a630d729`, n4800)."""
+"""The main run's steps over its 4,800 simulations. Still the old main
+run's final checkpoint (`chronos-slots-66a7a630d729`, n4800) until the
+retrained `finetuned` run's final checkpoint gives its own."""
 
 MAX_PASSES = 20
 """Most passes over the real-data blocks, however few steps a pass is."""

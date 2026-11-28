@@ -377,6 +377,7 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
         "sameplace": "sameplace",
         "parentchild": "parentchild",
         "nolags": "nolags",
+        "realdata": "realdata",
     }
     assert set(CONFIG["comparisons"].values()) <= set(runs)
     for name in CONFIG["comparisons"]:
@@ -387,7 +388,8 @@ def test_the_comparisons_are_passed_by_run_name() -> None:
     flow = _flow()
     assert flow.comparisons_arg() == (
         "--comparison nobiases=nobiases --comparison sameplace=sameplace "
-        "--comparison parentchild=parentchild --comparison nolags=nolags"
+        "--comparison parentchild=parentchild --comparison nolags=nolags "
+        "--comparison realdata=realdata"
     )
 
 

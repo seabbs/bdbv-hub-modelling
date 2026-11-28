@@ -1,14 +1,14 @@
 # Fine-tuning on real data alone (`foundation_real`).
 #
-# A run with `data: real` (workflow/config.yaml `runs.realonly`) trains
+# A run with `data: real` (workflow/config.yaml `runs.realdata`) trains
 # Chronos-2 from base on the German development half and the public BDBV
 # releases, with the main run's recipe. Its blocks are the studies'
 # forecast tasks laid out as the fine-tuned model forecasts them
 # (nowcastfoundation.finetune.realtasks): the reporting triangle with its
 # lag series at the data rule's lag count, every level in its blocks with
 # their 7-day rows. It trains with the attention biases, in passes. Its
-# blocks are cut once (`realonly_blocks_germany`,
-# `realonly_blocks_bdbv`; the cut is packages/nowcastfoundation/config/
+# blocks are cut once (`realdata_blocks_germany`,
+# `realdata_blocks_bdbv`; the cut is packages/nowcastfoundation/config/
 # finetune.toml `[realdata_germany]`, `[realdata_bdbv]`), and each
 # checkpoint n<N> (thousandths of the training) is trained by `train_real` from the one before
 # (`finetune-real`, nowcastfoundation.finetune.realdata). Its checkpoints
@@ -17,16 +17,16 @@
 # rules/publish.smk); a real checkpoint's release is
 # `realdata-ft-<hash>`.
 #
-# Target: `finetune_realonly` (task workflow:finetune-realonly), which
+# Target: `finetune_realdata` (task workflow:finetune-realdata), which
 # trains every checkpoint, scores them on the German development half,
 # writes the run's tables and German report, and releases the final
 # checkpoint. It writes a GitHub release, so it is never part of `all`.
 #
-# This is not the `realdata` run, which mixes German blocks into Run A's
-# simulations (`finetune.real_training`, rule real_training_blocks).
+# This is not `finetune.real_training`, which mixes German blocks into a
+# run's simulations (rule real_training_blocks).
 
 
-rule realonly_blocks_germany:
+rule realdata_blocks_germany:
     # Every nowcast date with truth by the last day of the development
     # half: its German tasks (Germany with its states, with its ages),
     # from the triangle as available then, laid out as forecast.
@@ -47,7 +47,7 @@ rule realonly_blocks_germany:
         "--realdata --block-limit {params.block_limit} > {log} 2>&1"
 
 
-rule realonly_blocks_bdbv:
+rule realdata_blocks_bdbv:
     # Every public BDBV release up to the one in `[realdata_bdbv]`: its
     # Ebola task laid out as forecast (the joint block of the country,
     # provinces and active zones, a block per province), truth masked
@@ -113,8 +113,8 @@ rule train_real:
         "--note \"{params.note}\" > {log} 2>&1"
 
 
-def realonly_inputs(wc=None):
-    """What `finetune_realonly` asks of each real run: every checkpoint,
+def realdata_inputs(wc=None):
+    """What `finetune_realdata` asks of each real run: every checkpoint,
     its German unit, the run's tables and German report, and the final
     checkpoint's release."""
     out = []
@@ -132,6 +132,6 @@ def realonly_inputs(wc=None):
     return out
 
 
-rule finetune_realonly:
+rule finetune_realdata:
     input:
-        realonly_inputs,
+        realdata_inputs,

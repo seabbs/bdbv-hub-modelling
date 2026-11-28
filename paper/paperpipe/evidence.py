@@ -126,24 +126,18 @@ VALIDATION_LEVELS: Final = ("national", "intermediate", "leaf")
 tables), each reported on its own."""
 
 COMPARISONS: Final = {
-    "slots": (
-        "the slots and no-slots runs' scores by checkpoint",
-        ("all biases", "no biases"),
+    "nobiases": (
+        "the fine-tuned and no attention bias runs' scores by checkpoint",
+        ("Fine-tuned", "No attention biases"),
     ),
-    "delays": (
-        "the full and no-delay runs' scores by checkpoint",
-        ("with delays", "without delays"),
+    "nolags": (
+        "the fine-tuned and no lag series runs' scores by checkpoint",
+        ("Fine-tuned", "No lag series"),
     ),
-    # The workflow's `realdata` run: German blocks mixed into Run A's
-    # simulations.
+    # The workflow's `realdata` run: real data alone (`foundation_real`).
     "realdata": (
-        "the real-data and synthetic fine-tunes' scores",
-        ("synthetic", "synthetic and German"),
-    ),
-    # The workflow's `realonly` run: real data alone (`foundation_real`).
-    "realonly": (
-        "the real-only and synthetic fine-tunes' scores",
-        ("synthetic", "real data alone"),
+        "the real-data and fine-tuned models' scores",
+        ("Fine-tuned", "Real data"),
     ),
 }
 """Each fine-tuning comparison of the live run with a variant: what it
@@ -151,11 +145,11 @@ waits on until the variant is scored, and the two runs' labels. The
 variant is named by its workflow run (the paper config's `comparisons`)."""
 
 BIAS_SUBSETS: Final = {
-    "sameonly": "same place only",
-    "parentonly": "parent and child only",
+    "sameplace": "Same place only",
+    "parentchild": "Parent and child only",
 }
 """The runs with only some of the attention biases, by their name in the
-paper config's `comparisons`, and their labels. Each joins the slots
+paper config's `comparisons`, and their labels. Each joins the no-biases
 comparison beside the run without biases, rather than being one of its
 own."""
 
@@ -165,12 +159,12 @@ def compared(
 ) -> tuple[list[str], tuple[str, ...]]:
     """Return a comparison's variant runs and the labels of all its runs.
 
-    The live run's label comes first. The slots comparison also takes
+    The live run's label comes first. The no-biases comparison also takes
     each attention bias subset that `pairs` names (`BIAS_SUBSETS`).
     """
     labels = COMPARISONS[name][1]
     others = [pairs[name]]
-    if name == "slots":
+    if name == "nobiases":
         for key, label in BIAS_SUBSETS.items():
             if key in pairs:
                 others.append(pairs[key])
@@ -274,7 +268,7 @@ def slots_summary(
     scores: pd.DataFrame,
     run: str,
     without: str | Sequence[str],
-    labels: Sequence[str] = COMPARISONS["slots"][1],
+    labels: Sequence[str] = COMPARISONS["nobiases"][1],
 ) -> pd.DataFrame:
     """Return zero-shot and each attention bias setup at a shared size.
 
@@ -928,16 +922,16 @@ def write_evidence(
     table(
         "slots-summary",
         None
-        if data["compare_slots"] is None
-        else slots_summary(raw, run, *compared("slots", pairs)),
-        ["compare_slots"],
+        if data["compare_nobiases"] is None
+        else slots_summary(raw, run, *compared("nobiases", pairs)),
+        ["compare_nobiases"],
     )
     table(
         "block-combinations",
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("slots", "delays", "realdata", "realonly", "daily"):
+    for name in ("nobiases", "nolags", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

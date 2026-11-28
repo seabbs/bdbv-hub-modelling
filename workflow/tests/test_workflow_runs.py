@@ -26,9 +26,11 @@ def test_the_committed_runs_are_the_fine_tuned_model_and_its_ablations():
         "sameplace",
         "parentchild",
         "nolags",
+        "realdata",
     ]
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    assert runs.trained(cfg, found) == list(cfg["runs"])
+    # The real-data run trains through a target of its own.
+    assert runs.trained(cfg, found) == list(cfg["runs"])[:-1]
 
 
 def test_every_run_trains_with_the_release_layer():

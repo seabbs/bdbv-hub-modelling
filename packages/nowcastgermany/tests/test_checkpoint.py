@@ -385,7 +385,7 @@ def test_the_comparison_holds_each_run_and_one_zero_shot() -> None:
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
 
     got = ck.comparison([rows("finetuned"), rows("nobiases")])
-    assert sorted(got["run"]) == ["nobiases", "finetuned", "zero-shot"]
+    assert sorted(got["run"]) == ["finetuned", "nobiases", "zero-shot"]
 
 
 def test_the_german_config_scores_four_weeks_ahead_too() -> None:

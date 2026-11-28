@@ -4,8 +4,9 @@
     release_layer_page.py SIMS GRID LAYER BDBV_DAILY GERMANY OUT
         [--sims-n 20] [--workers 4]
 
-Cuts the same simulations twice, as Run A cuts them (its grid, seed,
-blocks per simulation, block limit and quiet floor), without and with the
+Cuts the same simulations twice, as the fine-tuned model's run cuts
+them (its grid, seed, blocks per simulation, block limit and quiet
+floor), without and with the
 release layer (`finetune.chronos.RELEASE_LAYER`), and sets them beside a
 real BDBV block (the hub's daily releases) and German blocks (daily
 releases): example blocks, the drawn delays and cadences, each block's
@@ -42,7 +43,7 @@ RUN_A = {
     "quiet": 10,
     "loss_days": 7,
 }
-"""Run A's cut settings (its held-out key)."""
+"""The fine-tuned model's run's cut settings (its held-out key)."""
 
 PLAIN = ("daily", "weekly", "3day")
 """Sources whose covariate rows are lag series alone, so a block's fill
@@ -485,7 +486,7 @@ table{{border-collapse:collapse;font-size:13px}} .muted{{color:var(--muted);font
 A share of blocks ({start.get("share", 0):.0%}) has its releases start late: every release before the drawn start day is dropped and the cut's is kept.
 The first kept release then holds every onset reported before it, the lag rows start there and the counts row keeps the whole history, as in the BDBV hub's data.
 Its cadences set the share of daily-step blocks released weekly ({layer.get("cadences", {}).get("daily", {}).get("weekly", 0.2):.0%}).</p>
-<p class="muted">The same {len(ids)} Run A held-out simulations ({ids[0]} to {ids[-1]}), cut as Run A cuts them (grid, seed 1, 32 blocks a simulation, block limit 1,000, quiet floor 10), without and with the layer: {n} blocks of the daily, weekly and 3-day sources (the summed sources have extra rows and are left out of the counts here). Delay drawn from {start.get("delay_days")}.</p>
+<p class="muted">The same {len(ids)} held-out simulations of the fine-tuned model's run ({ids[0]} to {ids[-1]}), cut as that run cuts them (grid, seed 1, 32 blocks a simulation, block limit 1,000, quiet floor 10), without and with the layer: {n} blocks of the daily, weekly and 3-day sources (the summed sources have extra rows and are left out of the counts here). Delay drawn from {start.get("delay_days")}.</p>
 <h2>1. Example blocks, before and after</h2>
 <p>Each panel is one block's country: the top row is the counts (onset day), the rows below are its lag series (lag 0 down to lag D-1). Grey cells have no value. The last panel is the BDBV hub's national daily block.</p>
 <img src="data:image/png;base64,{ex}" alt="Example blocks before and after the release layer, and a BDBV block">

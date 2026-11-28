@@ -138,7 +138,7 @@ def real_training_blocks(run: Run) -> str:
 
 
 def real_blocks(run: Run) -> dict[str, str]:
-    """Return a real run's block files (rules realonly_blocks_*)."""
+    """Return a real run's block files (rules realdata_blocks_*)."""
     return {
         "germany": f"{run.dir}/real/germany.pkl",
         "bdbv": f"{run.dir}/real/bdbv.pkl",
