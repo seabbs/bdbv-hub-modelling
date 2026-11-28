@@ -252,22 +252,6 @@ def test_nowcast_panel_marks_a_missing_ribbon(gappy) -> None:
     plt.close(fig)
 
 
-def test_finetune_size_plots_one_line_per_finetuned_model() -> None:
-    from paperfigs.plots import si_scores_by_finetune_size
-
-    fc, _ = dummy_study("synthetic", seed=1, n_samples=10)
-    fig = si_scores_by_finetune_size(score_forecasts(fc))
-    ax = fig.axes[0]
-    # The reference line at 1 spans the axes, from 0 to 1.
-    xs = sorted(
-        {x for line in ax.get_lines() for x in line.get_xdata()} - {0, 1}
-    )
-    assert xs[0] == 1000
-    assert xs[-1] == 16000
-    assert ax.get_xscale() == "log"
-    plt.close(fig)
-
-
 def test_nowcasts_draw_each_dates_latest_count_when_releases_are_partial():
     fc, obs = dummy_study("germany", seed=1, n_samples=5)
     # The last release holds only its last week, as the German data do.

@@ -35,7 +35,6 @@ from matplotlib.ticker import (
 )
 from nowcasteval.labels import WIS_PART_FILLS, WIS_PART_STACK, model_label
 
-from paperfigs.checkpoints import checkpoint_of
 from paperfigs.factors import (
     ALWAYS_SHOWN,
     bin_factors,
@@ -73,7 +72,6 @@ __all__ = [
     "rows_of_target",
     "si_place_dots",
     "si_scores_by_factor",
-    "si_scores_by_finetune_size",
     "si_scores_by_location_horizon",
     "si_wis_over_time",
 ]
@@ -1163,63 +1161,6 @@ def si_scores_by_factor(
     scale = "log scale" if col == "rel_log_score" else "natural scale"
     fig.supylabel(f"Relative {name} ({scale})", fontsize=9)
     _legend_models(fig, models, split)
-    return fig
-
-
-def si_scores_by_finetune_size(
-    scores: pd.DataFrame, baseline: str | None = None
-) -> Figure:
-    """Plot relative scores against the fine-tune's training outbreaks.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        `score_forecasts` output for the synthetic study, with checkpoint
-        models named `<model>@<outbreaks>` (`paperfigs.checkpoints`).
-    baseline : str, optional
-        Model relative scores are divided by. Defaults to the study's
-        entry in `STUDY_BASELINES`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        Two panels: the relative score and the relative log-scale score,
-        one line per fine-tuned model.
-    """
-    study = str(scores["study"].iloc[0])
-    baseline = baseline or STUDY_BASELINES[study]
-    name = metric_of(scores).upper()
-    rel = relative_scores(scores, baseline=baseline)
-    sizes = [checkpoint_of(m) for m in rel["model"]]
-    rel = rel.assign(
-        base=[s[0] if s else None for s in sizes],
-        size=[s[1] if s else None for s in sizes],
-    ).dropna(subset=["base"])
-    models = model_order(rel["base"].unique())
-    fig, axes = plt.subplots(1, 2, figsize=(9, 3.6), layout="constrained")
-    for ax, col, letter, title in (
-        (axes[0], "rel_score", "A", f"Relative {name}"),
-        (axes[1], "rel_log_score", "B", f"Relative {name}, log scale"),
-    ):
-        for m in models:
-            one = rel.loc[rel["base"] == m].sort_values("size")
-            ax.plot(
-                one["size"],
-                one[col],
-                lw=1.4,
-                ms=5,
-                **{**line_style(m, models), **point_style(m, models)},
-            )
-        _log_ratio_axis(ax)
-        _pad_log_limits(ax, rel[col].to_numpy())
-        ax.set_xscale("log")
-        ax.set_xticks(sorted(rel["size"].unique()))
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}"))
-        ax.xaxis.set_minor_formatter(NullFormatter())
-        ax.set_xlabel("Fine-tuning outbreaks")
-        _label(ax, letter, title)
-    axes[0].set_ylabel(f"Relative to {model_label(baseline)}")
-    _legend_models(fig, models)
     return fig
 
 

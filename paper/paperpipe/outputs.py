@@ -41,7 +41,6 @@ from paperfigs.plots import (
     rows_of_target,
     si_place_dots,
     si_scores_by_factor,
-    si_scores_by_finetune_size,
     si_scores_by_location_horizon,
     si_wis_over_time,
 )
@@ -77,7 +76,6 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
             "si-factors",
             "si-factors-log",
             "si-wis-over-time",
-            "si-finetune-size",
             "si-results-crps",
         ),
     },
@@ -282,7 +280,6 @@ def _figures(
                 main, factors, baseline, col="rel_log_score"
             ),
             "si-wis-over-time": si_wis_over_time(main),
-            "si-finetune-size": si_scores_by_finetune_size(scores, baseline),
         }
     national = _national(study, forecasts, nowcasts)
     daily = {}

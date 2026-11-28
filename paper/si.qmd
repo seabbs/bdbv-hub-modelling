@@ -855,7 +855,6 @@ Choices tuned on development data, with their values and the data they were set 
 - We break down each case study's scores by location and horizon.
 - For Germany we also score our models' forecasts up to 4 weeks after the nowcast date, which the hub did not ask for.
 - We show each case study's WIS over time.
-- We show held-out synthetic scores by the number of fine-tuning outbreaks.
 :::
 
 
@@ -913,12 +912,6 @@ Held-out synthetic data: WIS over time. {{< meta results.synthetic.label >}} {{<
 ![](build/figures/si/synthetic-si-results-crps.png)
 
 Held-out synthetic data: the main results figure for every model that gives samples, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
-
-::: {#fig-synthetic-si-finetune-size}
-![](build/figures/si/synthetic-si-finetune-size.png)
-
-Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 100 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-horizon}
