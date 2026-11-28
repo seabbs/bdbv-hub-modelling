@@ -77,7 +77,7 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
-    target = tmp_path / "runs" / "runa" / "train" / "n100"
+    target = tmp_path / "runs" / "finetuned" / "train" / "n100"
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text(yaml.safe_dump({"finetune": finetune or {}}))
     out = subprocess.run(

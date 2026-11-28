@@ -208,6 +208,19 @@ def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
     assert FINETUNED_OF[name] in synthetic.MODELS
 
 
+def test_default_models_are_every_study_s_chronos_set() -> None:
+    # The main models and the baselinenowcast sensitivity, as Germany and
+    # Ebola run them.
+    assert set(synthetic.MODELS) >= {
+        "randomwalknowcast",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot",
+        "foundation",
+        "foundation_zeroshot_baselinenowcast",
+        "foundation_baselinenowcast",
+    }
+
+
 def test_the_random_walk_forecasts_a_single_place_as_the_country() -> None:
     task = synthetic.outbreak_tasks(_counts(("P01",)), "9-0001", 1, 10)[0]
     walk = synthetic.model_task(get_model("randomwalknowcast"), task)

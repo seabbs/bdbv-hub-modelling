@@ -1,4 +1,4 @@
-"""The real-only run: real data alone, the main run's recipe, one target."""
+"""The real-data run: real data alone, the recipe, one target."""
 
 import pytest
 from flowlib import runs
@@ -12,11 +12,11 @@ def _found():
     return cfg, runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
 
 
-def test_the_real_only_run_is_run_a_s_recipe_on_real_data():
+def test_the_real_data_run_is_the_recipe_on_real_data():
     # The data are the only difference from the main run: its layout,
     # its attention biases and its learning rates.
     cfg, found = _found()
-    a, real = found["runa"], found["realdata"]
+    a, real = found["finetuned"], found["realdata"]
     assert real.real
     assert not a.real
     assert real.ft["data"] == "real"
@@ -42,7 +42,7 @@ def test_the_real_trainer_takes_the_run_s_recipe():
     assert "--series-bias" in opts
     assert "--bias-lr" in opts
     assert "--prefixes 125 250 500 1000" in opts
-    # Passes to the main run's steps (Run A's final checkpoint), capped.
+    # Passes to the main run's steps, capped.
     assert "--target-steps 82040" in opts
     assert "--max-passes 20" in opts
 

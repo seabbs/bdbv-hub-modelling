@@ -2,13 +2,14 @@
 
 Two kinds of run read them (workflow/config.yaml `runs`):
 
-- A run with `real_training: germany` mixes them into Run A's
-  simulations: the German hub triangle cut into training blocks as the
-  German tasks lay it out, from reports before the first scored German
-  date only (`window`). Run as `python -m nowcastgermany.finetune_blocks
-  TRIANGLE OUT --first-date D --truth-delay N`, the window's two settings
-  from `packages/nowcastgermany/config/germany.toml` (rule
-  real_training_blocks). No committed run does.
+- a run with `real_training: germany` mixes them into its simulations
+  (no committed run does): the German hub triangle
+  cut into training blocks as the German tasks lay it out, from reports
+  before the first scored German date only (`window`). Run as `python -m
+  nowcastgermany.finetune_blocks TRIANGLE OUT --first-date D
+  --truth-delay N`, the window's two settings from
+  `packages/nowcastgermany/config/germany.toml` (rule
+  real_training_blocks).
 - `realdata` trains on real data alone (`foundation_real`): each nowcast
   date's German tasks, as the benchmark builds them
   (`data.nowcast_tasks`), laid out as the fine-tuned model forecasts them

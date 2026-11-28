@@ -94,6 +94,11 @@ def resolve(
         ft = grids.resolve(ft, config["grid_rounds"])
         if local.get("SIMS_FROM"):
             ft["sims_from"] = local["SIMS_FROM"]
+        if ft.get("bias_pairs") and not ft["series_bias"]:
+            raise ValueError(
+                f"run {name} sets bias_pairs without series_bias: the "
+                "pairs are the bias's"
+            )
         run = Run(name, ft, f"{local['ROOT']}/runs/{name}")
         if not run.real:
             # Chunks of outbreaks; a real run's prefixes are steps.
@@ -167,12 +172,22 @@ def real_trainer_options(run: Run) -> str:
 def trainer_options(run: Run) -> str:
     """Return the run's optional trainer arguments, each only when set.
 
-    The series bias and its rate, the loss horizon, the quiet-block
-    floor, a layout other than ragged, the release layer and the real-data
-    blocks.
+    The series bias, its rate and its kinds of pair where a run names
+    only some (`bias_pairs`), the loss horizon, the quiet-block floor, a
+    layout other than ragged, the release layer and the real-data blocks.
     """
     f = run.ft
-    bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
+    bias = ""
+    if f["series_bias"]:
+        pairs = f.get("bias_pairs")
+        bias = " ".join(
+            a
+            for a in (
+                f"--series-bias --bias-lr {f['bias_lr']}",
+                option("--bias-pairs", " ".join(pairs) if pairs else None),
+            )
+            if a
+        )
     return " ".join(
         a
         for a in (

@@ -46,13 +46,13 @@ def test_a_trainer_is_kept_its_rule_s_minimum_before_any_benchmark(tmp_path):
 
 def test_a_trainer_is_kept_the_most_any_segment_took(tmp_path):
     # archie's n3200 peaked at 8486 MB: n4800 asked for 10752.
-    _benchmark(tmp_path, "runa", 1600, 2000)
-    _benchmark(tmp_path, "runa", 3200, 8485.83)
+    _benchmark(tmp_path, "finetuned", 1600, 2000)
+    _benchmark(tmp_path, "finetuned", 3200, 8485.83)
     assert memory.trainer_mb(tmp_path) == 10752
 
 
 def test_jobs_beside_the_trainer_share_the_memory_it_leaves(tmp_path):
-    _benchmark(tmp_path, "runa", 3200, 8485.83)
+    _benchmark(tmp_path, "finetuned", 3200, 8485.83)
     cfg = {"ROOT": str(tmp_path)}
     args = machine.args(cfg, cores=12, total_mb=49861, path="")
     assert "mem_mb=49861" in _option(args, "--resources")

@@ -79,7 +79,7 @@ def _build(tmp_path):
             "foundation_complete": (70, 1),
         },
     )
-    rs = [runs.make_run("runa", str(run), live=True)]
+    rs = [runs.make_run("finetuned", str(run), live=True)]
     refs = _refs()
     built = nowcasts.build(
         cache,
@@ -197,7 +197,7 @@ def test_wis_by_horizon_is_the_checkpoint_s_own(tmp_path):
         origin,
         offsets,
     )
-    rs = [runs.make_run("runa", str(run), live=True)]
+    rs = [runs.make_run("finetuned", str(run), live=True)]
     built = nowcasts.build(cache, rs, _refs(), unit="germany-days")
     got = built["byday"]["DE"]["abc123def456"]["7day"]["daily"][origin]
     for k in offsets:

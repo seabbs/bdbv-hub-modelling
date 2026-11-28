@@ -46,11 +46,13 @@ from nowcastfoundation.live_checkpoint import label as checkpoint_label
 from paperpipe.outputs import to_markdown
 
 __all__ = [
+    "BIAS_SUBSETS",
     "COMPARISONS",
     "EVIDENCE",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
+    "compared",
     "comparison_figure",
     "comparison_rows",
     "copula_figure",
@@ -124,23 +126,50 @@ VALIDATION_LEVELS: Final = ("national", "intermediate", "leaf")
 tables), each reported on its own."""
 
 COMPARISONS: Final = {
-    "slots": (
-        "the slots and no-slots runs' scores by checkpoint",
-        ("attention biases", "no biases"),
+    "nobiases": (
+        "the fine-tuned and no attention bias runs' scores by checkpoint",
+        ("Fine-tuned", "No attention biases"),
     ),
-    "delays": (
-        "the full and no-delay runs' scores by checkpoint",
-        ("with delays", "without delays"),
+    "nodelays": (
+        "the fine-tuned and no delay information runs' scores by checkpoint",
+        ("Fine-tuned", "No delay information"),
     ),
     # The workflow's `realdata` run: real data alone (`foundation_real`).
     "realdata": (
-        "the real-data and synthetic fine-tunes' scores",
-        ("synthetic", "real data alone"),
+        "the real-data and fine-tuned models' scores",
+        ("Fine-tuned", "Real data"),
     ),
 }
 """Each fine-tuning comparison of the live run with a variant: what it
 waits on until the variant is scored, and the two runs' labels. The
 variant is named by its workflow run (the paper config's `comparisons`)."""
+
+BIAS_SUBSETS: Final = {
+    "sameplace": "Same place only",
+    "parentchild": "Parent and child only",
+}
+"""The runs with only some of the attention biases, by their name in the
+paper config's `comparisons`, and their labels. Each joins the no-biases
+comparison beside the run without biases, rather than being one of its
+own."""
+
+
+def compared(
+    name: str, pairs: Mapping[str, str]
+) -> tuple[list[str], tuple[str, ...]]:
+    """Return a comparison's variant runs and the labels of all its runs.
+
+    The live run's label comes first. The no-biases comparison also takes
+    each attention bias subset that `pairs` names (`BIAS_SUBSETS`).
+    """
+    labels = COMPARISONS[name][1]
+    others = [pairs[name]]
+    if name == "nobiases":
+        for key, label in BIAS_SUBSETS.items():
+            if key in pairs:
+                others.append(pairs[key])
+                labels = (*labels, label)
+    return others, labels
 
 
 SHARES: Final = {125: "1/8", 250: "1/4", 500: "1/2", 1000: "all"}
@@ -184,22 +213,28 @@ def _on_live_axis(rows: pd.DataFrame, run: str, other: str) -> pd.DataFrame:
 
 
 def comparison_rows(
-    scores: pd.DataFrame, run: str, other: str, labels: tuple[str, str]
+    scores: pd.DataFrame,
+    run: str,
+    other: str | Sequence[str],
+    labels: Sequence[str],
 ) -> pd.DataFrame:
-    """Return the live run and a variant, by checkpoint.
+    """Return the live run and its variants, by checkpoint.
 
     Sets are, one per level, the trainer's validation loss and the relative
     scores of each model on the German first half,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
-    `score`). `labels` name `run` and `other`. Empty while `other` has no
-    scored checkpoint. A variant on real data alone is its final
-    checkpoint at each of the live run's outbreaks (`_on_live_axis`).
+    `score`). `labels` name `run` and then each run of `other`, one
+    variant or several (`compared`). Empty while no variant has a scored
+    checkpoint. A variant on real data alone is its final checkpoint
+    at each of the live run's outbreaks (`_on_live_axis`).
     """
+    others = [other] if isinstance(other, str) else list(other)
     rows = tidy(scores)
-    names = dict(zip((run, other), labels, strict=True))
-    if not (rows["run"] == other).any():
+    names = dict(zip((run, *others), labels, strict=True))
+    if not rows["run"].isin(others).any():
         return pd.DataFrame(columns=["set", "run", "outbreaks", "score"])
-    rows = _on_live_axis(rows, run, other)
+    for variant in others:
+        rows = _on_live_axis(rows, run, variant)
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
     loss = rows.loc[
         (rows["study"] == "held_out") & rows["level"].isin(VALIDATION_LEVELS)
@@ -229,32 +264,44 @@ def comparison_rows(
     return pd.concat(out, ignore_index=True).dropna(subset=["score"])
 
 
-def slots_summary(scores: pd.DataFrame, run: str, without: str) -> pd.DataFrame:
-    """Return zero-shot and both runs at the largest size both reached.
+def slots_summary(
+    scores: pd.DataFrame,
+    run: str,
+    without: str | Sequence[str],
+    labels: Sequence[str] = COMPARISONS["nobiases"][1],
+) -> pd.DataFrame:
+    """Return zero-shot and each attention bias setup at a shared size.
 
-    Per study, each run keeps only checkpoints up to the largest number
-    of simulations both runs were scored at, so the rows compare like
-    with like; a study with no shared size is blank.
+    `without` is the run without biases, or it and the bias subsets
+    (`compared`); `labels` name `run` and then each of them. A setup with
+    no scored checkpoint has no row. Per study, each run keeps only
+    checkpoints up to the largest number of simulations every scored run
+    reached, so the rows compare like with like; a study with no shared
+    size is blank.
     """
+    others = [without] if isinstance(without, str) else list(without)
+    names = dict(zip((run, *others), labels, strict=True))
     rows = tidy(scores)
-    both = rows.loc[rows["run"].isin([run, without])]
+    kept = [r for r in names if r == run or (rows["run"] == r).any()]
+    both = rows.loc[rows["run"].isin(kept)]
     keep = pd.Series(True, index=scores.index)
     for study, g in both.groupby("study"):
-        sizes = [set(g.loc[g["run"] == r, "outbreaks"]) for r in (run, without)]
-        shared = sizes[0] & sizes[1]
+        sizes = [set(g.loc[g["run"] == r, "outbreaks"]) for r in kept]
+        shared = set.intersection(*sizes)
         top = max(shared) if shared else -1
         drop = (
             (scores["study"] == study)
-            & scores["run"].isin([run, without])
+            & scores["run"].isin(kept)
             & (scores["outbreaks"] > top)
         )
         keep &= ~drop
     matched = scores.loc[keep]
-    live = summary_table(matched, run)
-    none = summary_table(matched, without)
-    out = pd.concat([live, none.iloc[[1]]], ignore_index=True)
+    tables = [summary_table(matched, r) for r in kept]
+    out = pd.concat(
+        [tables[0], *(t.iloc[[1]] for t in tables[1:])], ignore_index=True
+    )
     out = out.rename(columns={"Simulations": "Run"})
-    out["Run"] = ["Zero-shot", "attention biases", "no biases"]
+    out["Run"] = ["Zero-shot", *(names[r] for r in kept)]
     return out
 
 
@@ -819,10 +866,10 @@ def write_evidence(
             data[name] = None if kept.empty else kept
     raw = data["checkpoint_scores"]
     pairs = dict(comparisons or {})
-    for name, (_, labels) in COMPARISONS.items():
+    for name in COMPARISONS:
         rows = None
         if raw is not None and name in pairs:
-            rows = comparison_rows(raw, run, pairs[name], labels)
+            rows = comparison_rows(raw, run, *compared(name, pairs))
         data[f"compare_{name}"] = None if rows is None or rows.empty else rows
     waits = EVIDENCE | {f"compare_{n}": d for n, (d, _) in COMPARISONS.items()}
 
@@ -875,16 +922,16 @@ def write_evidence(
     table(
         "slots-summary",
         None
-        if data["compare_slots"] is None
-        else slots_summary(raw, run, pairs["slots"]),
-        ["compare_slots"],
+        if data["compare_nobiases"] is None
+        else slots_summary(raw, run, *compared("nobiases", pairs)),
+        ["compare_nobiases"],
     )
     table(
         "block-combinations",
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("slots", "delays", "realdata", "daily"):
+    for name in ("nobiases", "nodelays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

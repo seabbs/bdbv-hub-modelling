@@ -54,7 +54,7 @@ def test_latest_is_the_main_run_s_checkpoint_not_the_newest_release(
     _point(
         releases,
         {
-            "run": "runa",
+            "run": "finetuned",
             "spec": "slots-main4800",
             "tag": "chronos-slots-main4800",
             "n_outbreaks": 4800,
@@ -79,7 +79,11 @@ def test_a_record_whose_tag_is_not_its_checkpoint_s_fails(
 ) -> None:
     _point(
         releases,
-        {"run": "runa", "spec": "slots-main4800", "tag": "chronos-ft-ablate"},
+        {
+            "run": "finetuned",
+            "spec": "slots-main4800",
+            "tag": "chronos-ft-ablate",
+        },
     )
     with pytest.raises(ValueError, match="chronos-ft-ablate"):
         fc.latest_spec()
@@ -101,10 +105,10 @@ def test_promoting_names_the_checkpoint_in_the_main_release(
 ) -> None:
     gh = fake_releases({"chronos-slots-main4800": {fc.SUMS_FILE: ""}})
     record = fs.promote_main(
-        _segment(tmp_path, SETTINGS), "runa", BRANCHES, run=gh
+        _segment(tmp_path, SETTINGS), "finetuned", BRANCHES, run=gh
     )
     assert {k: record[k] for k in ("run", "spec", "tag", "hash")} == {
-        "run": "runa",
+        "run": "finetuned",
         "spec": "slots-main4800",
         "tag": "chronos-slots-main4800",
         "hash": "main4800",
@@ -116,7 +120,7 @@ def test_promoting_names_the_checkpoint_in_the_main_release(
     # A later checkpoint replaces the record in place.
     gh.releases["chronos-slots-next"] = {fc.SUMS_FILE: ""}
     later = _segment(tmp_path / "later", {**SETTINGS, "hash": "next"})
-    fs.promote_main(later, "runa", BRANCHES, run=gh)
+    fs.promote_main(later, "finetuned", BRANCHES, run=gh)
     main = json.loads(gh.releases[fc.MAIN_TAG][fc.MAIN_FILE])
     assert main["spec"] == "slots-next"
 
@@ -126,5 +130,7 @@ def test_an_unreleased_checkpoint_is_never_promoted(
 ) -> None:
     gh = fake_releases({})
     with pytest.raises(RuntimeError, match="chronos-slots-main4800"):
-        fs.promote_main(_segment(tmp_path, SETTINGS), "runa", BRANCHES, run=gh)
+        fs.promote_main(
+            _segment(tmp_path, SETTINGS), "finetuned", BRANCHES, run=gh
+        )
     assert fc.MAIN_TAG not in gh.releases

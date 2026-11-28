@@ -127,16 +127,20 @@ def test_the_coupling_is_chosen_from_the_model_s_earlier_forecasts(
 
     monkeypatch.setattr(foundation, "choose_coupling", spy)
     model = get_model("foundation_zeroshot")
+    n_views = len(_views(model, task))
+    # The active-zone rule cuts the fixture's block into views.
+    assert n_views > 1
     model.forecast(task)
-    # The task's block and the same block at earlier releases.
-    assert pipe.groups > 1
+    # The task's views and the same views at earlier releases.
+    assert pipe.groups % n_views == 0
+    assert pipe.groups > n_views
     ((q_shape, seen_shape, days, day, history, starts, kw),) = chosen
     # Each earlier release's day, before the task's own.
     assert (np.diff(days) > 0).all()
     assert days[-1] < day
     assert day - days[0] <= trajectories.COUPLING_DAYS
     assert q_shape[:3] == seen_shape
-    assert seen_shape[0] == pipe.groups - 1
+    assert seen_shape[0] == pipe.groups // n_views - 1
     # The history ends before the first step drawn; each earlier block
     # starts before that.
     assert history.shape[0] == seen_shape[1]
@@ -146,7 +150,8 @@ def test_the_coupling_is_chosen_from_the_model_s_earlier_forecasts(
     assert method == fit["method"] in {"gaussian", "schaake"}
     record = model.copula_fit
     assert record["method"] == method
-    assert record["chosen_by"] in {"energy", "fallback"}
+    # Chosen by its score on the earlier views, not the fallback.
+    assert record["chosen_by"] == "energy"
     assert "windows" not in record
     assert set(record["energy"]) <= {
         trajectories._label(m, w) for m, w in trajectories.CANDIDATES
@@ -166,7 +171,7 @@ def test_the_si_couplings_need_no_earlier_forecasts(
         get_model("foundation_zeroshot"), coupling=method
     )
     model.forecast(task)
-    assert pipe.groups == 1
+    assert pipe.groups == len(_views(model, task))
     assert couplings[-1] == (method, {"method": method})
 
 
@@ -196,9 +201,10 @@ def test_with_no_earlier_release_the_history_couples(
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     monkeypatch.setattr(foundation, "coupling_releases", lambda *_: [])
-    out = get_model("foundation_zeroshot").forecast(task)
+    model = get_model("foundation_zeroshot")
+    out = model.forecast(task)
     assert not out.empty
-    assert pipe.groups == 1
+    assert pipe.groups == len(_views(model, task))
     method, fit = couplings[-1]
     # Not independent draws: the Schaake shuffle on the series' history.
     assert (method, fit["chosen_by"], fit["n_eval"]) == (
@@ -216,21 +222,24 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
     calls = []
     past_blocks = foundation.FoundationModel._past_blocks
 
-    def spy(self, rows, places, tri, start, horizon):
-        out = past_blocks(self, rows, places, tri, start, horizon)
-        calls.append((tri, start, horizon, out))
+    def spy(self, rows, places, tri, start, horizon, views):
+        out = past_blocks(self, rows, places, tri, start, horizon, views)
+        calls.append((tri, start, horizon, views, out))
         return out
 
     monkeypatch.setattr(foundation.FoundationModel, "_past_blocks", spy)
     model.forecast(task)
-    ((tri, start, horizon, past),) = calls
+    ((tri, start, horizon, views, past),) = calls
     assert past
     period = model.for_task(task)._period(tri)
     now = np.concatenate([tri.final, period.totals])
     final = []
-    for block, seen, _, _ in past:
-        # Each block is the task's block as it stood earlier: less context.
-        assert np.atleast_2d(block["target"]).shape[1] < start
+    for blocks, seen, _, _ in past:
+        # Each release's blocks are the task's views as they stood
+        # earlier: less context.
+        assert len(blocks) == len(views)
+        for block in blocks:
+            assert np.atleast_2d(block["target"]).shape[1] < start
         assert seen.shape == (now.shape[0], horizon)
         # Final steps first, then NaN from the first step not yet final.
         n = int(np.isfinite(seen[0]).sum())
@@ -268,22 +277,8 @@ def test_earlier_blocks_raise_errors_other_than_no_rows(
         get_model("foundation_zeroshot").forecast(task)
 
 
-def test_a_block_over_the_limit_is_coupled_as_one_block(
-    monkeypatch: pytest.MonkeyPatch, couplings: list, task: ForecastTask
-):
-    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
-    model = get_model("foundation_zeroshot")
-    per = 2 + model.lag_count(task)
-    cut = dataclasses.replace(model, block_limit=3 * per)
-    assert len(cut._views(*_places_and_triangle(cut, task))) > 1
-    out = cut.forecast(task)
-    assert not out.empty
-    # The views' quantiles are put back together and coupled once, by the
-    # whole block's fit: its Schaake windows span every place.
-    ((method, fit),) = couplings
-    assert (method, fit["chosen_by"]) == ("schaake", "fallback")
-
-
-def _places_and_triangle(model, task):
-    rows, places, weeks = model._rows(task)
-    return places, model._triangle(rows, places, weeks[-1])
+def _views(model, task):
+    """Return the views `model` cuts `task`'s block into."""
+    run = model.for_task(task)
+    rows, places, weeks = run._rows(task)
+    return run._views(places, run._triangle(rows, places, weeks[-1]))

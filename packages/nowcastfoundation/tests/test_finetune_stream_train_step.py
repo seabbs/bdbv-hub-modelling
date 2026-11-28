@@ -237,7 +237,7 @@ def test_the_footprint_counts_weights_and_the_trained_parameters_thrice():
 @pytest.mark.parametrize(
     ("series", "tokens", "ran_out"),
     [
-        # Run runa, n1600 on archie (RTX 2070, 8 GB): blocks under
+        # Run finetuned, n1600 on archie (RTX 2070, 8 GB): blocks under
         # `checkpoint_above` that ran out of memory alone, by series and
         # tokens (trimmed context patches, the reg token and output
         # patches), from the saved chunk blocks.

@@ -69,7 +69,7 @@ def _batch(folder: Path, seed: int, latent: bool = False) -> None:
 def root(tmp_path):
     _batch(tmp_path / "rounds" / "r1" / "sims", 101, latent=True)
     _batch(tmp_path / "rounds" / "r1" / "sims", 102)
-    _batch(tmp_path / "runs" / "runa" / "sims", 101)
+    _batch(tmp_path / "runs" / "finetuned" / "sims", 101)
     (tmp_path / "rounds" / "r2" / "sims").mkdir(parents=True)
     return tmp_path
 
@@ -83,7 +83,7 @@ def test_each_grid_setting_has_its_layer():
 
 def test_the_sources_are_the_rounds_and_runs_with_simulations(root):
     got = sims.sources(root)
-    assert list(got) == ["r1", "runa"]
+    assert list(got) == ["r1", "finetuned"]
     assert got["r1"] == root / "rounds" / "r1" / "sims"
 
 
@@ -157,7 +157,9 @@ def test_one_simulation_s_detail(root):
 
 
 def test_a_simulation_without_latent_values_has_none(root):
-    got = sims.simulation(root / "runs" / "runa" / "sims", "101-0002", LAYERS)
+    got = sims.simulation(
+        root / "runs" / "finetuned" / "sims", "101-0002", LAYERS
+    )
     assert got["latent"] is None
     assert got["strata"] == {"P01": [3] * 7}
 
@@ -206,7 +208,7 @@ def test_the_server_answers_the_page_index_and_one_simulation(server):
     assert "<title>Simulations</title>" in body
     status, body = _get(server + "/sims/sources.json")
     assert status == 200
-    assert [s["key"] for s in json.loads(body)] == ["r1", "runa"]
+    assert [s["key"] for s in json.loads(body)] == ["r1", "finetuned"]
     status, body = _get(server + "/sims/index/r1.json")
     assert status == 200
     assert len(json.loads(body)["ids"]) == 4
@@ -279,12 +281,12 @@ def test_the_index_keeps_the_grid_s_order_and_notes(root, tmp_path):
 def test_the_newest_run_is_the_default_source(root, tmp_path):
     import os
 
-    _batch(root / "runs" / "runb" / "sims", 101)
-    for name, when in (("runa", 1000), ("runb", 2000)):
+    _batch(root / "runs" / "nobiases" / "sims", 101)
+    for name, when in (("finetuned", 1000), ("nobiases", 2000)):
         for f in (root / "runs" / name / "sims").iterdir():
             os.utime(f, (when, when))
     listing = sims.Index(root, tmp_path / "cache", LAYERS).listing()
-    assert [s["key"] for s in listing if s["default"]] == ["runb"]
+    assert [s["key"] for s in listing if s["default"]] == ["nobiases"]
     assert {s["key"]: s["kind"] for s in listing}["r1"] == "round"
 
 

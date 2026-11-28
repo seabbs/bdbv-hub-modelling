@@ -429,22 +429,32 @@ def _tasks(
     seed: int,
     root: Path | None,
     horizons: Sequence[int] = HORIZONS,
+    max_delay: int | None = None,
 ) -> list[ForecastTask]:
     """Return a date's tasks, from the store `root` if it holds them.
 
     The store holds each date's tasks (states, ages) as a gzip-compressed
     pickle (level 1: about 40 times smaller, and fast to read). Tasks of
-    other horizons than the hub's are kept in a folder named by them.
+    other horizons than the hub's are kept in a folder named by them, and
+    tasks with a `max_delay` in a folder named by it.
     """
+
+    def build() -> list[ForecastTask]:
+        return nowcast_tasks(
+            triangle, date, n_samples, seed, horizons, max_delay=max_delay
+        )
+
     if root is None:
-        return nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
+        return build()
     root = Path(root)
     if tuple(horizons) != tuple(HORIZONS):
         root = root / f"horizons{min(horizons)}_{max(horizons)}-{len(horizons)}"
+    if max_delay is not None:
+        root = root / f"max_delay{max_delay}"
     path = root / f"{date}.pkl.gz"
     if path.exists():
         return list(pickle.loads(gzip.decompress(path.read_bytes())))
-    tasks = nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
+    tasks = build()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     raw = pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL)
@@ -513,7 +523,9 @@ def germany_forecasts(
         The truth's delay (`GermanyConfig.truth_delay`): the models see
         only the counts reported within it (`nowcastgermany.data.within_delay`),
         so they forecast the count the truth holds, not the eventual one.
-        A `tasks_dir` must then be keyed on it.
+        It is also each task's `max_delay`, so Chronos-2 has lags 0 to it
+        (`FoundationModel.for_task`). A `tasks_dir` keeps such tasks in
+        a folder named by it.
     timings : list, optional
         Given, a row is appended for each model and date: `model`,
         `origin`, `stage` (`forecast`) and `seconds`; and one for each
@@ -543,7 +555,9 @@ def germany_forecasts(
     tasks: dict[str, list[ForecastTask]] = {}
     if any(isinstance(m, FoundationModel) for m in built):
         tasks = {
-            d: _tasks(triangle, d, n_samples, seed, tasks_dir, horizons)
+            d: _tasks(
+                triangle, d, n_samples, seed, tasks_dir, horizons, max_delay
+            )
             for d in dates
         }
         every = [t for ts in tasks.values() for t in ts]
@@ -564,7 +578,9 @@ def germany_forecasts(
     for date in dates:
         mine = tasks.pop(date, None)
         if mine is None:
-            mine = _tasks(triangle, date, n_samples, seed, tasks_dir, horizons)
+            mine = _tasks(
+                triangle, date, n_samples, seed, tasks_dir, horizons, max_delay
+            )
         spent = dict.fromkeys(models, 0.0)
         for task in mine:
             for name, model in zip(models, built, strict=True):

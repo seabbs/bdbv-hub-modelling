@@ -234,10 +234,10 @@ def test_a_block_too_large_for_memory_stops_the_run():
 
 
 def test_a_block_too_large_alone_is_recomputed_not_waited_for():
-    # Run runa, n100 step 98: a block of 588 series under `checkpoint_above`
-    # ran out of an 8 GB GPU alone, and the trainer waited for another
-    # process that was not there. It is run again with its activations
-    # recomputed, at once, which the same block fits in.
+    # A run's n100, step 98: a block of 588 series under
+    # `checkpoint_above` ran out of an 8 GB GPU alone, and the trainer
+    # waited for another process that was not there. It is run again with
+    # its activations recomputed, at once, which the same block fits in.
     from contextlib import contextmanager
 
     from nowcastfoundation.finetune.stream import accumulate

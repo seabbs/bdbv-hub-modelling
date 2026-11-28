@@ -292,9 +292,11 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     seen: dict[str, tuple] = {}
     for layout in LAYOUTS:
         store: list = []
+        # Every zone in the joint block: no active-zone rule.
         model = dataclasses.replace(
             _model(BY_LAYOUT[layout], source),
             sample=_recording(store),
+            active_zone_cases=None,
         )
         model.forecast(task)
         groups, horizon = store[0]
@@ -1281,7 +1283,9 @@ def test_the_active_zone_rule_forecasts_every_place_once(
     model = get_model("foundation_zeroshot")
     whole_seen: list = []
     split_seen: list = []
-    whole = dataclasses.replace(model, sample=_own_last(whole_seen))
+    whole = dataclasses.replace(
+        model, sample=_own_last(whole_seen), active_zone_cases=None
+    )
     split = dataclasses.replace(
         model, sample=_own_last(split_seen), active_zone_cases=10**9
     )

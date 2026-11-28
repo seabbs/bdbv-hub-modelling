@@ -362,11 +362,11 @@ def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
         "foundation",
     )
     _, refs = _setup()
-    rs = [runs.make_run("runa", str(run), live=True)]
+    rs = [runs.make_run("finetuned", str(run), live=True)]
     built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
     assert "abc123def456" in built["sets"]
     assert "rw" in built["sets"]
-    assert built["folders"]["abc123def456"] == "runa-abc123def456"
+    assert built["folders"]["abc123def456"] == "finetuned-abc123def456"
 
 
 def test_plotted_truth_is_the_raw_count_in_both_german_views(tmp_path):
@@ -636,13 +636,13 @@ def test_a_run_s_interim_checkpoint_is_shown_labelled_interim(tmp_path):
         "foundation",
     )
     _, refs = _setup()
-    rs = [runs.make_run("runa", str(run), live=True)]
+    rs = [runs.make_run("finetuned", str(run), live=True)]
     built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
     assert "abc123def456" in built["sets"]
     sizes = {"abc123def456": 2000}
     shown = nowcasts.meta(built, rs, refs, sizes)
     one = next(m for m in shown if m["id"] == "abc123def456")
-    assert one["run"] == "runa"
+    assert one["run"] == "finetuned"
     assert one["n"] == 2000
     assert "interim" in one["label"]
 

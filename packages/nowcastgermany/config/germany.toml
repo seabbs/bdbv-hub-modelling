@@ -65,10 +65,8 @@ models = [
 # BDBV to date), run on the held-out half only, for the SI's comparison
 # with the models fine-tuned on simulations. Its checkpoint is released as
 # realdata-ft-<hash> and pinned by `realdata` in packages/nowcastfoundation/config/finetune.toml; the
-# model is registered only once that pin is set (it is empty), and its
-# training is not a workflow rule. The workflow's real-data run is
-# different: `runs.realdata` in workflow/config.yaml mixes German real-data
-# blocks into Run A's simulations.
+# model is registered only once that pin is set (it is empty), and the
+# workflow's `realdata` run trains it (workflow/config.yaml `runs`).
 held_out_models = [
   "foundation_real",
 ]

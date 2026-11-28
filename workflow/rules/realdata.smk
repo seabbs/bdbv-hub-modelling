@@ -22,8 +22,8 @@
 # writes the run's tables and German report, and releases the final
 # checkpoint. It writes a GitHub release, so it is never part of `all`.
 #
-# It mixes no German blocks into simulations (`finetune.real_training`,
-# rule real_training_blocks), which no committed run does.
+# This is not `finetune.real_training`, which mixes German blocks into a
+# run's simulations (rule real_training_blocks).
 
 
 rule realdata_blocks_germany:
@@ -66,7 +66,7 @@ rule realdata_blocks_bdbv:
         data=lambda wc, input: Path(input[0]).parent,
         block_limit=local_or_ft("BLOCK_LIMIT", "block_limit"),
     shell:
-        "uv run python -m nowcastbdbv.finetune_blocks {params.data} {output} "
+        "uv run python -m bdbvhub.finetune_blocks {params.data} {output} "
         "--block-limit {params.block_limit} > {log} 2>&1"
 
 

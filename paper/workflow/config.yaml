@@ -16,7 +16,7 @@ studies: [synthetic, germany, ebola]
 # record (published.json, rule publish_checkpoint) is an input of each
 # rule that runs one, so a new final checkpoint reruns them. Null leaves
 # the run out and the fine-tuned forecasts pending.
-final_run: $ROOT/runs/runa
+final_run: $ROOT/runs/finetuned
 # The fine-tuning runs' folder under the machine's ROOT (the workflow's
 # runs): each run in `live_run` and `comparisons` has an SI progress figure
 # from its own reports (rule progress_<run>). Null leaves them out.
@@ -29,7 +29,7 @@ rounds_dir: $ROOT/rounds
 # The live fine-tuning run (the checkpoint scores' `run`, its workflow
 # run name) whose newest scored checkpoints the SI comparisons and
 # tables show as preliminary.
-live_run: runa
+live_run: finetuned
 # The branches whose commits may promote an endpoint (the release
 # `<endpoint>-main` naming its current version, `nowcastutils.pointers`):
 # rules promote_main and promote_paper_<set> refuse any other commit.
@@ -37,12 +37,15 @@ promote_branches: [main, next]
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
-# until its run has a scored checkpoint. `realdata` is Chronos-2
-# fine-tuned on real data alone (`foundation_real`), with no simulations,
-# drawn as its final checkpoint across the live run's.
+# until its run has a scored checkpoint. The attention bias subsets
+# (`evidence.BIAS_SUBSETS`) join the no-biases comparison. `realdata` is
+# Chronos-2 fine-tuned on real data alone (`foundation_real`), with no
+# simulations, drawn as its final checkpoint across the live run's.
 comparisons:
-  slots: noslots
-  delays: nodelays
+  nobiases: nobiases
+  sameplace: sameplace
+  parentchild: parentchild
+  nodelays: nodelays
   realdata: realdata
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
@@ -119,7 +122,16 @@ ebola:
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
-  backtest_models: [randomwalk, randomwalknowcast]
+  # The walks and the paper-only Chronos-2 models, as in the other
+  # studies. The fine-tuned ragged model (`foundation`) is a stored model,
+  # so its forecasts are the fit store's in `backtest`, not run here.
+  backtest_models:
+    - randomwalk
+    - randomwalknowcast
+    - foundation_zeroshot_complete
+    - foundation_zeroshot
+    - foundation_zeroshot_baselinenowcast
+    - foundation_baselinenowcast
   # Draws per forecast of the paper's own run of `backtest_models`, with
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.
@@ -178,10 +190,10 @@ evidence:
   compare_daily:
     file: $ROOT/runs/compare-daily.csv
   # The realised shares of each combination of block layout and options
-  # (rule block_combinations). From the no-slots run, which cuts the same
-  # blocks as Run A.
+  # (rule block_combinations). From the no-biases run, which cuts the
+  # same blocks as the fine-tuned model's run.
   block_combinations:
-    file: $ROOT/runs/noslots/train/block-combinations.csv
+    file: $ROOT/runs/nobiases/train/block-combinations.csv
 
 # Data the development runs use.
 development:

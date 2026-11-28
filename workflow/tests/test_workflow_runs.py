@@ -15,42 +15,69 @@ TWO = {
 }
 
 
-def test_the_committed_runs_are_run_a_its_variants_and_run_b():
+LAYER = "packages/nowcastfoundation/config/finetune/release-layer.yaml"
+
+
+def test_the_committed_runs_are_the_fine_tuned_model_and_its_ablations():
     cfg = runs.load_config()
     assert list(cfg["runs"]) == [
-        "runa",
-        "noslots",
+        "finetuned",
+        "nobiases",
+        "sameplace",
+        "parentchild",
         "nodelays",
         "realdata",
-        "runb",
     ]
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    # The real-data run trains through a target of its own.
+    assert runs.trained(cfg, found) == list(cfg["runs"])[:-1]
 
 
-def test_run_b_trains_with_the_release_layer():
-    # Run B is Run A's recipe with the release layer; the committed
-    # config must name the layer's file.
+def test_every_run_trains_with_the_release_layer():
+    # The release layer is part of the recipe: the default names its
+    # file, so every run, the ablations included, trains with it.
+    cfg = runs.load_config()
+    assert cfg["finetune"]["release_layer"] == LAYER
+    assert (runs.CONFIG.parents[1] / LAYER).is_file()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    for run in found.values():
+        assert run.ft["release_layer"] == LAYER
+        assert f"--release-layer {LAYER}" in runs.trainer_options(run)
+
+
+def test_the_no_biases_run_is_the_recipe_without_the_attention_biases():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    layer = found["runb"].ft["release_layer"]
-    assert (
-        layer == "packages/nowcastfoundation/config/finetune/release-layer.yaml"
-    )
-    assert (runs.CONFIG.parents[1] / layer).is_file()
-    assert f"--release-layer {layer}" in runs.trainer_options(found["runb"])
-    assert "--release-layer" not in runs.trainer_options(found["runa"])
-    assert runs.trained(cfg, found) == ["runa", "noslots"]
-
-
-def test_the_no_slots_run_is_run_a_without_the_attention_biases():
-    cfg = runs.load_config()
-    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    a, b = found["runa"].ft, found["noslots"].ft
+    a, b = found["finetuned"].ft, found["nobiases"].ft
     assert a["series_bias"]
     assert not b["series_bias"]
     assert {k: v for k, v in a.items() if k != "series_bias"} == {
         k: v for k, v in b.items() if k != "series_bias"
     }
-    assert "--series-bias" not in runs.trainer_options(found["noslots"])
+    assert "--series-bias" not in runs.trainer_options(found["nobiases"])
+
+
+@pytest.mark.parametrize(
+    ("name", "pairs"), [("sameplace", "same"), ("parentchild", "up down")]
+)
+def test_the_bias_subset_runs_are_the_recipe_with_some_biases(name, pairs):
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    a, b = found["finetuned"].ft, found[name].ft
+    assert b["series_bias"]
+    assert {k: v for k, v in a.items() if k != "bias_pairs"} == {
+        k: v for k, v in b.items() if k != "bias_pairs"
+    }
+    got = runs.trainer_options(found[name])
+    assert f"--series-bias --bias-lr {b['bias_lr']} --bias-pairs {pairs}" in got
+    assert "--bias-pairs" not in runs.trainer_options(found["finetuned"])
+
+
+def test_bias_pairs_without_the_bias_are_refused():
+    cfg = runs.load_config()
+    cfg["runs"] = {"x": {"series_bias": False, "bias_pairs": ["same"]}}
+    with pytest.raises(ValueError, match="bias_pairs"):
+        runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
 
 
 def test_a_run_takes_the_finetune_defaults_and_its_overrides():
@@ -69,8 +96,8 @@ def test_a_run_takes_the_finetune_defaults_and_its_overrides():
 def test_the_machine_chooses_where_batches_come_from():
     cfg = runs.load_config()
     got = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": "release"})
-    assert got["runa"].ft["sims_from"] == "release"
-    assert got["runa"].elsewhere
+    assert got["finetuned"].ft["sims_from"] == "release"
+    assert got["finetuned"].elsewhere
 
 
 def test_the_local_config_names_no_run_folder(tmp_path):
@@ -132,25 +159,23 @@ def test_trainer_options_name_only_the_settings_given():
 
 
 def test_the_release_layer_is_passed_only_when_a_run_names_one():
-    # Late release starts and weekly releases drawn at
-    # fine-tune time; no run takes it until its entry names the file.
-    assert runs.load_config()["finetune"]["release_layer"] is None
+    # Late release starts and weekly releases drawn at fine-tune time;
+    # a run set to null trains without them.
     assert "--release-layer" not in runs.trainer_options(_run())
-    path = "packages/nowcastfoundation/config/finetune/release-layer.yaml"
-    got = runs.trainer_options(_run(release_layer=path))
-    assert got == f"--release-layer {path}"
+    got = runs.trainer_options(_run(release_layer=LAYER))
+    assert got == f"--release-layer {LAYER}"
 
 
-def test_the_no_delays_run_is_run_a_on_complete_counts():
+def test_the_no_lags_run_is_the_recipe_on_complete_counts():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    a, b = found["runa"].ft, found["nodelays"].ft
+    a, b = found["finetuned"].ft, found["nodelays"].ft
     assert (a["layout"], b["layout"]) == ("ragged", "complete")
     assert {k: v for k, v in a.items() if k != "layout"} == {
         k: v for k, v in b.items() if k != "layout"
     }
     assert "--layout complete" in runs.trainer_options(found["nodelays"])
-    assert "--layout" not in runs.trainer_options(found["runa"])
+    assert "--layout" not in runs.trainer_options(found["finetuned"])
 
 
 def test_a_run_trains_without_waiting_on_any_other(tmp_path):
@@ -202,28 +227,28 @@ def test_the_runs_trainers_queue_in_the_config_s_order(tmp_path):
     assert max(got["a"]) < compute.TRAIN_PRIORITY + 1
 
 
-MIXED = {"runs": {"mixed": {"real_training": "germany"}}}
-"""A run with German blocks mixed into Run A's simulations, which no
-committed run is any more; the machinery stays."""
+REAL = {**FT, "runs": {"a": {}, "mixed": {"real_training": "germany"}}}
 
 
-def test_a_mixed_run_is_run_a_with_the_german_blocks():
+def test_a_run_with_real_training_mixes_in_the_german_blocks():
+    # No committed run mixes real data into the simulations; the option
+    # stays for a run that names it.
     cfg = runs.load_config()
-    cfg["runs"] = {"runa": {}, **MIXED["runs"]}
+    cfg["runs"] = REAL["runs"]
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    a, b = found["runa"].ft, found["mixed"].ft
+    a, b = found["a"].ft, found["mixed"].ft
     assert (a["real_training"], b["real_training"]) == (None, "germany")
     assert {k: v for k, v in a.items() if k != "real_training"} == {
         k: v for k, v in b.items() if k != "real_training"
     }
     blocks = "/data/runs/mixed/real-training.pkl"
     assert f"--real-training {blocks}" in runs.trainer_options(found["mixed"])
-    assert "--real-training" not in runs.trainer_options(found["runa"])
+    assert "--real-training" not in runs.trainer_options(found["a"])
 
 
-def test_a_mixed_run_cuts_its_german_blocks_before_training(tmp_path):
+def test_a_real_training_run_cuts_its_german_blocks_before_training(tmp_path):
     target = f"{tmp_path}/runs/mixed/real-training.pkl"
-    out = dry_run(tmp_path, target, config=MIXED, quiet=False)
+    out = dry_run(tmp_path, target, config=REAL, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     assert "nowcastgermany.finetune_blocks" in out.stdout
     # The window comes from the German config, as the rule reads it.

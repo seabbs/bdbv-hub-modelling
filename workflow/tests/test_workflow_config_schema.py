@@ -44,9 +44,9 @@ def test_a_wrong_or_unknown_setting_is_an_error(where, key, value):
 
 def test_a_run_takes_finetune_s_settings_and_no_others():
     config = copy.deepcopy(CONFIG)
-    config["runs"] = {"runb": {"cuts": 32, "prefixes": [100, 200]}}
+    config["runs"] = {"nobiases": {"cuts": 32, "prefixes": [100, 200]}}
     check(config)
-    config["runs"]["runb"]["cutz"] = 32
+    config["runs"]["nobiases"]["cutz"] = 32
     with pytest.raises(Exception, match=r"(?i)validat"):
         check(config)
 
