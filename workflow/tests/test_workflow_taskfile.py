@@ -182,3 +182,36 @@ def test_a_task_runs_at_the_repository_root_from_anywhere(where, task):
     assert out.returncode == 0, out.stderr
     after = {p for p in ROOT.rglob("home") if ".venv" not in p.parts}
     assert after == before
+
+
+@pytest.mark.parametrize(
+    ("task", "command"),
+    [
+        (
+            ["workflow:paper-inputs"],
+            "paper_run.py --targets paper_inputs",
+        ),
+        (["workflow:paper"], "paper_run.py development"),
+        (["workflow:paper", "MODE=paper"], "paper_run.py paper"),
+        (["workflow:finetune-realdata"], "finetune_realdata"),
+    ],
+)
+def test_each_paper_step_has_a_workflow_task(task, command):
+    # The stored inputs, the real-data run and the paper in either mode
+    # each have a command beside the other workflow targets.
+    out = subprocess.run(
+        ["task", "--dry", *task],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    assert command in out.stdout + out.stderr
+
+
+def test_no_scheduled_tick_runs_the_paper():
+    # The paper's tasks are run by hand: a tick never reads held-out data.
+    from flowlib import schedule
+
+    for target in ("paper", "paper_inputs", "finetune_realdata"):
+        assert target not in schedule.TARGETS
