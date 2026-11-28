@@ -74,3 +74,42 @@ def test_the_trainer_resumes_each_checkpoint_from_the_one_before(tmp_path):
     assert any("--until 1000" in s and "n500/state" in s for s in shells)
     blocks = _jobs_of(out, "realdata_blocks_germany")[0]["shell"]
     assert "--realdata" in blocks
+
+
+def _final_settings(run):
+    return f"{run.train}/n{max(run.ft['prefixes'])}/settings.json"
+
+
+def test_the_real_run_takes_its_steps_from_the_fine_tuned_run():
+    # Its passes aim at the fine-tuned run's steps, read from that run's
+    # final checkpoint, so the target is never a hand number.
+    _, found = _found()
+    real = found["realdata"]
+    assert real.ft["steps_from"] == "finetuned"
+    assert runs.steps_source(real, found) == _final_settings(
+        found["finetuned"]
+    )
+
+
+def test_the_real_steps_are_the_final_checkpoint_s_when_present(tmp_path):
+    _, found = _found()
+    settings = tmp_path / "settings.json"
+    settings.write_text('{"steps": 91234, "hash": "abc"}')
+    opts = runs.real_trainer_options(found["realdata"], str(settings))
+    assert "--target-steps 91234" in opts
+    # Without the final checkpoint, the config's number.
+    missing = str(tmp_path / "none.json")
+    opts = runs.real_trainer_options(found["realdata"], missing)
+    assert "--target-steps 82040" in opts
+
+
+def test_the_real_run_trains_after_the_fine_tuned_run(tmp_path):
+    # Every real checkpoint takes the fine-tuned run's final checkpoint
+    # as an input, so it trains after it, to its steps.
+    out = dry_run(tmp_path, "finetune_realdata", quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    _, found = _found()
+    final = _final_settings(found["finetuned"]).replace("/data", "")
+    shells = [j["shell"] for j in _jobs_of(out, "train_real")]
+    assert shells
+    assert all(final in s for s in shells)
