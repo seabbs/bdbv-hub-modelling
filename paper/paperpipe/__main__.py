@@ -15,6 +15,7 @@ Steps, in workflow order:
 - `realism`: the grid's simulations against the German development half;
 - `pairing`: the walks' scores with and without pairing, summarised;
 - `coupling`: Chronos-2's Ebola trajectories under each coupling;
+- `renewal-variants`: the renewal variants compared on the Ebola rounds;
 - `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -273,6 +274,12 @@ def _coupling(a: argparse.Namespace) -> None:
     _write(summary, a.out)
 
 
+def _renewal_variants(a: argparse.Namespace) -> None:
+    from paperpipe.renewal import renewal_variants
+
+    _write(renewal_variants(_read(a.scores)), a.out)
+
+
 def _ebola_extra(a: argparse.Namespace) -> None:
     raw = pd.read_csv(a.input)
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
@@ -481,6 +488,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-scores", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_coupling)
+
+    p = sub.add_parser("renewal-variants")
+    p.add_argument("--scores", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_renewal_variants)
 
     p = sub.add_parser("ebola-extra")
     p.add_argument("--input", type=Path, required=True)

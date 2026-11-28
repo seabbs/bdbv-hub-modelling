@@ -14,6 +14,7 @@ and `None` in place of its numbers.
 - `pairing_numbers`: how the rolling copula changed the walks' scores.
 - `coupling_table` and `coupling_numbers`: Chronos-2's Ebola
   trajectories under each coupling, against its copula.
+- `renewal_table` and `renewal_numbers`: the renewal variants compared.
 - `realism_figure`: the simulated outbreaks against the data and
   published values.
 - `checkpoint_figure`: relative scores by checkpoint, the German panels of
@@ -70,6 +71,8 @@ __all__ = [
     "realism_figure",
     "realism_numbers",
     "realism_reference",
+    "renewal_numbers",
+    "renewal_table",
     "rho_medians",
     "slots_summary",
     "waiting",
@@ -649,6 +652,7 @@ EBOLA_EVIDENCE: Final = {
     "si_copula": "the walks' Ebola scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' Ebola rho_p by origin",
     "coupling": "Chronos-2's Ebola trajectories scored under each coupling",
+    "renewal_variants": "the renewal variants' Ebola scores",
 }
 """Each Ebola input and what it waits on until set: the paper run's own
 analyses of the held-out Ebola study (rules pairing_ebola and the
@@ -672,6 +676,14 @@ QUOTED: Final = {
         for m in COPULA_MODELS
     },
     "coupling": {"independent": NOT_YET, "comonotone": NOT_YET},
+    "renewal": {
+        name: {
+            key: NOT_YET
+            for level in ("national", "provinces", "zones")
+            for key in (level, f"{level}_change")
+        }
+        for name in ("bvd", "pooling")
+    },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
@@ -820,6 +832,40 @@ def coupling_numbers(rows: pd.DataFrame) -> dict:
     for coupling in out:
         if coupling in one.index:
             out[coupling] = _change(float(one[coupling]))
+    return out
+
+
+RENEWAL_LABELS: Final = {
+    "bvd": "With BVDOutbreakSize against without",
+    "pooling": "Pooled against each zone alone",
+}
+"""Each renewal comparison (`paperpipe.renewal.RENEWAL_PAIRS`)."""
+
+
+def renewal_table(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return the renewal comparisons as the SI shows them."""
+    return pd.DataFrame(
+        {
+            "Comparison": rows["comparison"].map(RENEWAL_LABELS),
+            "Level": rows["level"].str.capitalize(),
+            "Relative WIS": rows["rel_score"],
+            "Relative WIS (log)": rows["rel_log_score"],
+            "Forecasts": rows["n"].astype(int),
+        }
+    )
+
+
+def renewal_numbers(rows: pd.DataFrame) -> dict:
+    """Return each renewal comparison's relative WIS by level.
+
+    Each level's ratio to two decimals and, as `<level>_change`, the
+    signed percentage change it is (`QUOTED`'s where a level has no row).
+    """
+    out = {k: dict(v) for k, v in QUOTED["renewal"].items()}
+    for r in rows.itertuples():
+        node = out.setdefault(str(r.comparison), {})
+        node[str(r.level)] = round(float(r.rel_score), 2)
+        node[f"{r.level}_change"] = _change(float(r.rel_score))
     return out
 
 
@@ -1033,6 +1079,12 @@ def write_evidence(
         None if coupling is None else coupling_table(coupling),
         ["coupling"],
     )
+    renewal = data["renewal_variants"]
+    table(
+        "renewal-variants",
+        None if renewal is None else renewal_table(renewal),
+        ["renewal_variants"],
+    )
     dis = data["sim_diseases"]
     table(
         "sim-diseases",
@@ -1086,6 +1138,11 @@ def write_evidence(
                 QUOTED["coupling"]
                 if coupling is None
                 else coupling_numbers(coupling)
+            ),
+            "renewal": (
+                QUOTED["renewal"]
+                if renewal is None
+                else renewal_numbers(renewal)
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),

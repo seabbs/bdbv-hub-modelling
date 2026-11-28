@@ -506,7 +506,7 @@ Against the fine-tuned model, the German development score at the final checkpoi
 On the Ebola hub, the median rolling $\rho_p$ between provinces was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for the random walk nowcast, and pairing changed its national CRPS by {{< meta evidence.pairing.randomwalknowcast.national_crps >}} against no pairing (Supporting Information, *Impact of correlated trajectories*).
 Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score on log counts by {{< meta evidence.coupling.independent >}} and {{< meta evidence.coupling.comonotone >}} against its copula (Supporting Information, *Correlated trajectories*).
 
-The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
+Nationally, the renewal model using BVDOutbreakSize scored {{< meta evidence.renewal.bvd.national >}} relative to the main renewal model, and the main renewal model {{< meta evidence.renewal.pooling.national >}} relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
 
 ## Discussion
 
@@ -528,7 +528,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Correlated trajectories changed the random walk nowcast's national CRPS by {{< meta evidence.pairing.randomwalknowcast.national_crps >}} (Supporting Information, *Impact of correlated trajectories*).
   - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions [@Johnson2025] (Supporting Information, *Baselines*).
   - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, scored [X] against the other Ebola hub submissions [@BVDOutbreakSize; @lison2024] (Supporting Information, *Renewal model*).
-    Stabilising with BVDOutbreakSize changed scores by [X], and pooling and transmission between places by [X] (Supporting Information, *Renewal model variants*).
+    Stabilising with BVDOutbreakSize changed national scores by {{< meta evidence.renewal.bvd.national_change >}}, and pooling and transmission between places by {{< meta evidence.renewal.pooling.national_change >}} (Supporting Information, *Renewal model variants*).
 - **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
     However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.

@@ -726,6 +726,25 @@ rule coupling_ebola:
         "--out {output.summary}"
 
 
+# The renewal variants compared on the Ebola hub rounds, from the stored
+# fits the Ebola table reads (`paperpipe.renewal`), a paper run's only.
+rule renewal_variants:
+    input:
+        f"{R}/paper/scores/ebola.csv.gz",
+    output:
+        FLOW.ebola_files()["renewal_variants"],
+    log:
+        f"{R}/logs/renewal_variants.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe renewal-variants --scores {input} "
+        "--out {output}"
+
+
 # The grid's training rounds against the German development half, for
 # the SI's realism figure and numbers (`paperpipe realism`).
 if FLOW.rounds_dir:

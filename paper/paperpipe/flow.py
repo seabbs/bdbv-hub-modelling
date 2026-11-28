@@ -287,13 +287,15 @@ class PaperFlow:
 
         The walks' pairing scores, summarised, and their rolling rho_p on
         the Ebola release backtest (rule pairing_ebola), and Chronos-2's
-        trajectories under each coupling (rule coupling_ebola).
+        trajectories under each coupling (rule coupling_ebola), and the
+        renewal variants compared (rule renewal_variants).
         """
         evidence = f"{self.results}/paper/evidence"
         return {
             "si_copula": f"{evidence}/si-copula.csv",
             "copula_rho": f"{evidence}/pairing/pairing-bdbv-rho.csv.gz",
             "coupling": f"{evidence}/coupling.csv",
+            "renewal_variants": f"{evidence}/renewal-variants.csv",
         }
 
     def ebola_evidence(self, mode: str) -> dict[str, str]:
