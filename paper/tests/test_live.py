@@ -168,14 +168,13 @@ def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
 def test_a_run_on_real_data_alone_is_its_final_checkpoint() -> None:
     # The real-only run has steps, not outbreaks: its final checkpoint is
     # drawn across the live run's checkpoints, a line to compare with.
-    from paperpipe.evidence import COMPARISONS, comparison_rows
+    from paperpipe.evidence import comparison_rows
 
-    labels = COMPARISONS["realdata"][1]
+    labels = ("Fine-tuned", "Real data")
     out = comparison_rows(
         _real_only(_scores()), "one-model", "realdata", labels
     )
     real = out.loc[out["run"] == labels[1]]
-    assert labels[1] == "real data alone"
     assert not real.empty
     assert set(real["outbreaks"]) == {125, 1000}
     assert set(real["score"]) == {2.2}
@@ -202,8 +201,9 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     waiting = numbers["evidence"]["waiting"]
     assert COMPARISONS["nobiases"][0] not in waiting
     assert COMPARISONS["nodelays"][0] in waiting
-    assert COMPARISONS["realdata"][0] in waiting
     assert (tmp_path / "fig" / "compare-nodelays.png").is_file()
+    # The real-data run is quoted from its held-out scores alone.
+    assert not (tmp_path / "fig" / "compare-realdata.png").exists()
 
 
 def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:

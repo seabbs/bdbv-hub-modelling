@@ -377,9 +377,9 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
         "sameplace": "sameplace",
         "parentchild": "parentchild",
         "nodelays": "nodelays",
-        "realdata": "realdata",
     }
     assert set(CONFIG["comparisons"].values()) <= set(runs)
+    assert set(CONFIG["progress"]) <= set(runs)
     for name in CONFIG["comparisons"]:
         assert f"compare_{name}" not in CONFIG["evidence"]
 
@@ -388,8 +388,7 @@ def test_the_comparisons_are_passed_by_run_name() -> None:
     flow = _flow()
     assert flow.comparisons_arg() == (
         "--comparison nobiases=nobiases --comparison sameplace=sameplace "
-        "--comparison parentchild=parentchild --comparison nodelays=nodelays "
-        "--comparison realdata=realdata"
+        "--comparison parentchild=parentchild --comparison nodelays=nodelays"
     )
 
 
@@ -489,8 +488,16 @@ def test_each_paper_run_has_a_progress_figure_from_its_own_tables() -> None:
     flow = _flow()
     runs = flow.progress_runs()
     assert runs == list(
-        dict.fromkeys([CONFIG["live_run"], *CONFIG["comparisons"].values()])
+        dict.fromkeys(
+            [
+                CONFIG["live_run"],
+                *CONFIG["comparisons"].values(),
+                *CONFIG["progress"],
+            ]
+        )
     )
+    # The real-data run keeps its progress figure, with no comparison.
+    assert "realdata" in runs
     for run in runs:
         files = flow.progress_files(run)
         assert set(files) == {"loss", "seven_day", "bdbv", "horizons"}
@@ -523,3 +530,14 @@ def test_only_a_paper_run_s_progress_figure_reads_the_bdbv_check() -> None:
     assert PaperFlow.progress_args("paper", files) == (
         "--loss l.csv --bdbv b.csv"
     )
+
+
+def test_the_real_data_run_is_no_development_comparison() -> None:
+    # It trains on the German development half, so a comparison there is
+    # in-sample: it is quoted from its held-out scores alone
+    # (real-finetune.md).
+    from paperpipe.evidence import COMPARISONS
+
+    assert "realdata" not in CONFIG["comparisons"]
+    assert "realdata" not in COMPARISONS
+    assert "realdata" in CONFIG["progress"]
