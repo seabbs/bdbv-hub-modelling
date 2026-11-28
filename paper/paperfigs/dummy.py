@@ -125,6 +125,8 @@ _HUB_BASE = ModelSkill(-0.05, 1.1, 1.3)
 _FM = ModelSkill(0.08, 1.15, 0.7)
 _FM_COMPLETE = ModelSkill(-0.12, 1.3, 0.9)
 _FM_FT = ModelSkill(0.0, 0.75, 1.0)
+_FM_BNC = ModelSkill(-0.05, 1.1, 1.0)
+_FM_FT_BNC = ModelSkill(-0.02, 0.85, 1.05)
 
 STUDY_SETUP: Final[dict[str, StudySetup]] = {
     "synthetic": StudySetup(
@@ -145,6 +147,8 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "foundation_zeroshot_complete": _FM_COMPLETE,
             "foundation_zeroshot": _FM,
             "foundation": _FM_FT,
+            "foundation_zeroshot_baselinenowcast": _FM_BNC,
+            "foundation_baselinenowcast": _FM_FT_BNC,
             "epinowcast": ModelSkill(0.0, 0.65, 1.05),
             # Checkpoints of the fine-tune, improving with its outbreaks.
             **{
@@ -181,6 +185,8 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "foundation_zeroshot_complete": _FM_COMPLETE,
             "foundation_zeroshot": _FM,
             "foundation": _FM_FT,
+            "foundation_zeroshot_baselinenowcast": _FM_BNC,
+            "foundation_baselinenowcast": _FM_FT_BNC,
             "KIT-frozen_baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.03, 0.8, 1.1),
             "hub_team_a": ModelSkill(0.15, 0.9, 0.9),
@@ -208,6 +214,8 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "foundation_zeroshot_complete": _FM_COMPLETE,
             "foundation_zeroshot": _FM,
             "foundation": _FM_FT,
+            "foundation_zeroshot_baselinenowcast": _FM_BNC,
+            "foundation_baselinenowcast": _FM_FT_BNC,
             "BDBVHub-baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.05, 0.85, 1.0),
             "hub_team_a": ModelSkill(0.2, 1.0, 0.8),

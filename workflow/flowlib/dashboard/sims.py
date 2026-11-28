@@ -174,7 +174,7 @@ CURVES = (
 )
 """Each simulation's curves (`flowlib.delay_structure.curves`)."""
 
-CACHE_VERSION = 3
+CACHE_VERSION = 5
 """The batch summaries' version: a cached summary of another is redone."""
 
 
@@ -195,7 +195,9 @@ def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
     (cadence), the largest weekly log growth, the observation noise
     (the mean absolute log ratio of each day's final count to its
     centred 7-day mean) and the delay structure's numbers
-    (`flowlib.delay_structure.scalars`). Curves: the delay structure's
+    (`flowlib.delay_structure.scalars`: among them how the strata's
+    delays move together, follow the counts, burst and withdraw, and
+    the delay's noise by part). Curves: the delay structure's
     (`CURVES`): the delay distribution's cumulative share at
     `DELAY_POINTS`, the reference- and report-date weekday profiles
     (Monday first, each weekday's counts over their mean), the mean
@@ -583,6 +585,7 @@ def _detail(
                     "value": value,
                 }
             )
+    drawn = {str(k): v for k, v in row.iloc[0].items()} if not row.empty else {}
     order = {k: i for i, k in enumerate((*LAYER_ORDER, "other"))}
     listed.sort(key=lambda s: order.get(s["layer"], len(order)))
     latent = None
@@ -609,6 +612,8 @@ def _detail(
         "settings": listed,
         "latent": latent,
         "structure": _structure(rows),
+        "noise_drawn": ds.drawn_noise(drawn) if drawn else None,
+        "ascertainment_drawn": ds.drawn_ascertainment(drawn) if drawn else None,
     }
 
 
@@ -621,7 +626,11 @@ def simulation(
     counts as known at a quarter, half and three quarters of the way
     through, the share reported at each delay, its reporting triangle by
     week of reference and week of delay, its settings with their layers,
-    and its infections, onsets and R where the batch kept them.
+    its infections, onsets and R where the batch kept them, its delay
+    structure (`flowlib.delay_structure.structure`, each stratum's delays
+    week by week among it), its drawn delay noise sds by layer
+    (`flowlib.delay_structure.drawn_noise`) and its drawn ascertainment
+    (`flowlib.delay_structure.drawn_ascertainment`).
     """
     m = _ID.match(oid)
     if not m:

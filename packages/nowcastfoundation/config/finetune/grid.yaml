@@ -50,6 +50,8 @@ shares:
   weekday_pattern_part: 0.5 # each part of a structured pattern
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
+  delay_counts_longer: 0.65 # delays longer, not shorter, when counts are high
+  ascertainment_counts_lower: 0.6 # ascertainment lower, not higher, at peaks
 rates:
   shifts: 0.7          # shifts in R per simulation (half have none)
   extra_waves: 0.5     # multi-wave: waves beyond 2
@@ -63,6 +65,10 @@ counts:
   shocks_per_place: {base: 1, mean: 0.5}
   shock_weeks: {base: 1, mean: 1}
   slow_weeks: {base: 1, mean: 3}
+  burst_strata: {base: 1, mean: 0.15}
+  bursts_per_stratum: {base: 1, mean: 0.15}
+  burst_days: {base: 2, mean: 5}
+  burst_keep_days: {base: 1, mean: 2}
   active_places: {base: 1, mean: 1}
   late_places: {base: 1, mean: 0.5}
   # Strata: places and ages, drawn again until the system fits the
@@ -112,6 +118,17 @@ factor_layers:
   delay_jitter: delays
   report_cap: reporting
   report_stop: reporting
+  delay_strata_noise: delays
+  delay_change_strata: strata
+  delay_change_switch: delays
+  delay_change_combine: delays
+  delay_counts: delays
+  bursts: reporting
+  ascertainment_change: observation
+  ascertainment_change_strata: strata
+  ascertainment_change_switch: observation
+  ascertainment_counts: observation
+  ascertainment_noise: observation
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -131,6 +148,7 @@ weekday_noise: 0.3
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
   expected_scale: 1000
+  burst_keep_max: 7    # the most days an over-reporting burst stands
 factors:
   gt_family:
     gamma: 1
@@ -274,6 +292,89 @@ factors:
   report_stop:
     'no': 9
     'yes': 1
+  # Noise on every delay parameter by stratum: static (`strata`), week to
+  # week in each stratum (`strata_time`) or both, on top of the week-to-
+  # week noise shared by all strata (`delay_jitter`); none in half.
+  delay_strata_noise:
+    none: 3
+    strata: 1
+    strata_time: 1
+    both: 1
+  # How strata's delay changes relate: one change for all (`shared`), the
+  # shared change mixed with each stratum's own of the same kind
+  # (`related`, a share `delay_change_rho` shared), or each stratum's own
+  # change of a kind it draws (`independent`), so one place's delays can
+  # lengthen while the others stay the same.
+  delay_change_strata:
+    shared: 4
+    related: 2
+    independent: 1
+  # Related or independent strata follow the shared change until a
+  # switch and then their own (`diverge`), or the reverse (`converge`).
+  delay_change_switch:
+    none: 3
+    diverge: 1
+    converge: 1
+  # A second kind of delay change added to the first (as drift and step,
+  # or walk and periodic) in a quarter of sims with a change.
+  delay_change_combine:
+    single: 3
+    combined: 1
+  # The delay's location linear in the stratum's log expected counts by
+  # reference date (not its infections): one slope for all strata, a
+  # static slope by stratum, or one that also moves week to week. Longer
+  # delays when counts are high (reporting strain) in about two thirds,
+  # shorter (more attention in a surge) in the rest, as the German states
+  # show both.
+  delay_counts:
+    none: 3
+    shared: 1
+    strata: 1
+    strata_time: 1
+  # Short over-reporting bursts in 5% of sims, as Bremen's in January
+  # 2022: for a few days to two weeks of reference dates in one stratum
+  # (rarely more, or more bursts), the first report is 1.5 to 7 times
+  # the final count and the excess is withdrawn 1 to 7 days later. The
+  # slow revisions (`revisions`) are separate.
+  bursts:
+    none: 19
+    'yes': 1
+  # Ascertainment that changes over time on the logit scale, on top of
+  # each stratum's drawn ascertainment (static in half of sims), as
+  # testing or attention changes: a drift, a step, a periodic or smooth
+  # cycle, or a weekly walk.
+  ascertainment_change:
+    static: 5
+    drift: 1
+    step: 1
+    periodic: 1
+    smooth: 1
+    walk: 1
+  # How strata's ascertainment changes relate, as for the delay change.
+  ascertainment_change_strata:
+    shared: 4
+    related: 2
+    independent: 1
+  ascertainment_change_switch:
+    none: 3
+    diverge: 1
+    converge: 1
+  # Ascertainment linear in the stratum's log expected counts by
+  # reference date: lower at peaks as testing saturates (60% of slopes,
+  # `ascertainment_counts_lower`) or higher with more attention.
+  ascertainment_counts:
+    none: 3
+    shared: 1
+    strata: 1
+    strata_time: 1
+  # Noise on ascertainment's logit by week, by stratum, by stratum and
+  # week, or all three.
+  ascertainment_noise:
+    none: 4
+    time: 1
+    strata: 1
+    strata_time: 1
+    all: 1
 distributions:
   quiet:
     dist: beta
@@ -588,6 +689,54 @@ distributions:
     scale: 0.3
     layer: strata
     why: pooled strata within about x0.5 to x2 of the shared value
+  ascertainment_drift:
+    dist: lognormal
+    median: 0.5
+    sdlog: 0.5
+    layer: observation
+    why: ascertainment's log odds drift by 0.2 to 1.1 (5-95%) over the series, about x1.2 to x3 in the odds
+  ascertainment_step:
+    dist: lognormal
+    median: 0.5
+    sdlog: 0.5
+    layer: observation
+    why: a step of 0.2 to 1.1 (5-95%) in ascertainment's log odds, as a change in testing
+  ascertainment_periodic:
+    dist: lognormal
+    median: 0.3
+    sdlog: 0.5
+    layer: observation
+    why: a periodic change of 0.13 to 0.7 (5-95%) in ascertainment's log odds
+  ascertainment_smooth_amp:
+    dist: lognormal
+    median: 0.3
+    sdlog: 0.5
+    layer: observation
+    why: a smooth cycle of 0.13 to 0.7 (5-95%) in ascertainment's log odds
+  ascertainment_walk_sd:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.4
+    layer: observation
+    why: a weekly walk of ascertainment's log odds with steps of about 0.05 to 0.2
+  ascertainment_counts_slope:
+    dist: lognormal
+    median: 0.15
+    sdlog: 0.5
+    layer: observation
+    why: ascertainment's log odds move by 0.07 to 0.34 (5-95%) per unit of log expected counts, so tenfold counts change the odds by about x1.2 to x2.2
+  ascertainment_counts_sd:
+    dist: lognormal
+    median: 0.3
+    sdlog: 0.4
+    layer: strata
+    why: strata's slopes of ascertainment on their counts within about x0.6 to x1.7 of the shared slope
+  ascertainment_noise_sd:
+    dist: lognormal
+    median: 0.15
+    sdlog: 0.5
+    layer: observation
+    why: noise on ascertainment's log odds of about 0.07 to 0.35 (5-95%) in each layer
   ascertainment:
     dist: beta
     a: 1.8
@@ -768,6 +917,52 @@ distributions:
     sdlog: 0.5
     layer: delays
     why: week-to-week jitter of the delay's parameters of about 4% to 23% (5-95%) on their log scale
+  delay_strata_sd:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.5
+    layer: delays
+    why: each stratum's static noise on the delay's parameters of about 4% to 23% (5-95%) on their log scale, as the week-to-week jitter
+  delay_strata_jitter_sd:
+    dist: lognormal
+    median: 0.07
+    sdlog: 0.5
+    layer: delays
+    why: each stratum's own week-to-week noise on the delay's parameters of about 3% to 16% (5-95%) on their log scale
+  delay_change_rho:
+    dist: beta
+    a: 2.0
+    b: 2.0
+    lower: 0.3
+    upper: 0.9
+    layer: strata
+    why: related strata share most but not all of their delay change, as correlated places share their R
+  delay_switch_at:
+    dist: beta
+    a: 2.0
+    b: 2.0
+    lower: 0.0
+    upper: 1.0
+    layer: delays
+    why: strata's delay changes diverge or converge away from the ends
+  delay_switch_days:
+    dist: lognormal
+    median: 14.0
+    sdlog: 0.6
+    layer: delays
+    why: strata's delay changes diverge or converge over a few days to six weeks
+  delay_counts_slope:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.6
+    layer: delays
+    why: the log delay moves by 0.04 to 0.27 (5-95%) per unit of log expected counts, so tenfold counts change the delay by about x1.1 to x1.9
+  delay_counts_sd:
+    dist: lognormal
+    median: 0.3
+    sdlog: 0.4
+    layer: strata
+    why: strata's slopes of the delay on their counts, on the log scale, within about x0.6 to x1.7 of the shared slope
   delay_dow_sd:
     dist: lognormal
     median: 0.1
@@ -783,13 +978,25 @@ distributions:
     layer: reporting
     why: shocks away from the ends
   revise_over:
+    dist: lognormal
+    median: 0.017
+    sdlog: 1.5
+    layer: reporting
+    why: a few percent of counts reported in error (0.1% to 20%, 5-95%), with a tail to 0.5 and beyond (1 in 80) where most of a release is in error
+  burst_at:
     dist: beta
-    a: 0.6
-    b: 19.4
+    a: 2.0
+    b: 2.0
     lower: 0.0
     upper: 1.0
     layer: reporting
-    why: a few percent of counts reported in error
+    why: over-reporting bursts away from the ends
+  burst_mult:
+    dist: lognormal
+    median: 3.2
+    sdlog: 0.45
+    layer: reporting
+    why: a burst's first report at about 1.5 to 7 times the final count (5-95%), as Bremen's 5 to 7
   revise_move:
     dist: beta
     a: 0.6

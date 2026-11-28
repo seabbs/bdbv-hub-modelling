@@ -104,3 +104,79 @@ def test_german_blocks_keep_the_real_dates(monkeypatch):
     for own, cutoffs in seen:
         assert cutoffs[-1] == "2021-06-01"  # a Tuesday
         assert own["reference_date"].min() == "2021-03-01"
+
+
+def _germany_config() -> dict:
+    import tomllib
+    from pathlib import Path
+
+    root = Path(__file__).parents[3]
+    path = root / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    return tomllib.loads(path.read_text())
+
+
+def test_the_realdata_window_is_the_development_half():
+    # The real-data checkpoint sees the German data as available on the
+    # last day of the development half, with the benchmark's truth delay.
+    german = _germany_config()
+    window = fg.realdata_window()
+    split = dt.date.fromisoformat(german["nowcast"]["split_date"])
+    assert window.as_of == (split - dt.timedelta(days=1)).isoformat()
+    assert window.as_of == "2022-02-09"
+    assert window.truth_delay == german["truth"]["delay"]
+    assert window.truth_until == "2021-12-31"
+    cuts = window.cuts()
+    # Every nowcast date with its truth by then, each cut once.
+    assert (cuts[0], cuts[-1]) == ("2021-04-20", "2021-12-03")
+    assert len(cuts) == len(set(cuts)) == 228
+    assert window.held_out_dates == 14
+
+
+def test_the_realdata_triangle_holds_nothing_after_the_window(tmp_path):
+    # Reports after the window's date are dropped, and the hub's change
+    # after 80 days (revisions to August 2022) is left out.
+    path = tmp_path / "triangle.csv"
+    _wide(200).to_csv(path, index=False)
+    tri = fg.realdata_triangle(path, "2021-06-30")
+    assert tri["report_date"].max() <= "2021-06-30"
+    delay = pd.to_datetime(tri["report_date"]) - pd.to_datetime(
+        tri["reference_date"]
+    )
+    assert delay.max() <= pd.Timedelta(days=80)
+
+
+def _window(**kw) -> "fg.RealdataWindow":
+    base = {
+        "as_of": "2021-07-31",
+        "truth_delay": 40,
+        "first_cut": "2021-04-20",
+        "held_out_dates": 2,
+    }
+    return fg.RealdataWindow(**(base | kw))
+
+
+@pytest.mark.slow
+def test_realdata_blocks_are_the_german_tasks_as_forecast(tmp_path):
+    # Each nowcast date's tasks (Germany with its states, Germany with its
+    # age groups) laid out as the fine-tuned model forecasts them: daily
+    # with 7-day rows, the data rule's lag count.
+    path = tmp_path / "triangle.csv"
+    _wide(200).to_csv(path, index=False)
+    window = _window()
+    tri = fg.realdata_triangle(path, window.as_of)
+    cuts = window.cuts()[:3]
+    blocks = fg.realdata_blocks(tri, window, cuts, block_limit=1000)
+    assert {b["cut"] for b in blocks} == set(cuts)
+    for b in blocks:
+        assert set(BLOCK_KEYS) <= set(b)
+        assert b["data"] == "germany"
+        assert b["source"] == "daily+rolling7"
+        assert b["places"][0] == "CD"
+        assert len(b["places"]) > 1
+        assert b["truth_end"] <= window.truth_until < window.as_of
+        assert b["context"].shape[0] <= 1000
+        # Each target place has its daily row and its 7-day row.
+        assert b["n_targets"] == 2 * len(b["places"])
+    groups = {frozenset(p for p in b["places"] if p != "CD") for b in blocks}
+    assert frozenset({"CD-BW", "CD-BY"}) in groups
+    assert frozenset({"CD-A0", "CD-A1"}) in groups

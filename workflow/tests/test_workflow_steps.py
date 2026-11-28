@@ -12,6 +12,7 @@ STEPS = (
     "publish",
     "score",
     "report",
+    "realdata",
     "paper",
     "monitor",
 )

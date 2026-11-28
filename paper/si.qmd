@@ -106,23 +106,32 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 
 #### Lag count
 
-::: {.callout-note title="Plan"}
-- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
-- Each block or task has one lag count.
-- Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
-- The lag count less one is the 98th percentile of these settling lags over the block's steps and places with a count.
-- Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
-- Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
-- A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
-- The estimate reads no release after the cut-off.
-- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
-- The lag count is capped only by the history, keeping two steps of context before the longest lag.
-- With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
-- Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.
-- At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.
-- The Ebola case study fixes it at 42 days, as the random walk nowcast uses, because too few onset days in the hub's releases have settled to estimate it.
-- A user can set a fixed count instead.
-:::
+The maximum delay $D$ sets the number of lagged series per place.
+It also sets the last complete date $E$, the latest release less $D$.
+We either estimate $D$ from the data or set it by hand.
+
+**Estimating $D$.**
+We estimate $D$ from the release history up to the cut-off, in four steps.
+
+1. For each reference date first published after releases began, we find the first reporting delay at which its reported count reaches 98% of its latest count. We call this its settling delay.
+2. We keep only reference dates seen for at least $1.5D$ days, so that their latest count stands for their final count and recent dates do not bias $D$ short.
+3. $D$ is one more than the 98th percentile of the settling delays over the kept dates and places with a count.
+4. As step 2 depends on $D$, we take the smallest $D$ that satisfies step 3.
+
+Reference dates before the first release are left out, as a first release that fills in earlier dates measures when releases began, not a delay.
+A delay on which no release fell carries the count of the delay before, as with weekly releases of daily data.
+If no reference date is old enough to have settled, $D$ is the whole release history.
+$D$ is capped only by the history, keeping two steps of context before the longest lag.
+Training blocks use the same rule, reading the simulation's releases up to the cut-off.
+In 10% of training blocks we scale $D$ by a factor drawn from Normal(1, 0.05), so the model can handle $D$ set slightly differently.
+The rule is the same for the zero-shot and fine-tuned models.
+<!-- TODO: compare with baselinenowcast's quantile delay rule, truncate_to_quantile (#1279), and cite @Johnson2025. -->
+
+**Setting $D$ by hand.**
+A user can instead fix $D$ for their setting, and both case studies do so.
+
+- For the German hub we set $D$ to 40 days, the delay at which the hub takes its truth, as our models see only reports made within 40 days of each reference date [@Wolffram2023].
+- For the Ebola hub we set $D$ to 42 days, based on our experience modelling the outbreak. The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$. The random walk nowcast uses the same 42 days.
 
 ### Synthetic data generation
 
@@ -161,6 +170,9 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 ::: {.callout-note title="Plan"}
 - We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.
 - We ascertain a share of the reference events as cases.
+- In half of simulations ascertainment changes over time on the logit scale, by a drift, a step, a periodic or smooth cycle or a weekly walk, shared by the strata, related or independent between them, and possibly diverging or converging part way through.
+- In half of simulations ascertainment also depends on each stratum's log expected counts by reference date, lower at peaks as testing saturates in 60% of slopes and higher with more attention otherwise.
+- Ascertainment can also take noise by week, by stratum, or by stratum and week.
 - We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.
 - Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise."
 - Table (planned): "Layer 2, sampling distributions of the observation settings, each with its reason."
@@ -173,7 +185,10 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
 - Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
 - In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.
-- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
+- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change, or by two of them combined.
+- Strata share the delay change, mix it with a change of their own, or each follow their own, so one place's delays can lengthen while the others' stay the same, and strata can share the change for part of the series and then diverge, or the reverse.
+- In half of simulations the delay depends on each stratum's log expected counts by reference date, not its infections: longer when counts are high in 65% of slopes and shorter otherwise, as the German states show both.
+- Every delay parameter takes noise by week shared by the strata, by stratum, or by stratum and week, in any mix.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
 - Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
 :::
@@ -190,6 +205,8 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 - Reporting shocks add backlogs or outages.
 - Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
+- The share reported in error is a few percent in most strata, with a tail to half or more of a release.
+- In 5% of simulations a short over-reporting burst, usually in one stratum, first reports a few days to two weeks of reference dates at 1.5 to 7 times their final count and withdraws the excess within 1 to 7 days, as Bremen's hospitalisations in January 2022.
 - Some cases are filed under a nearby reference day and moved later.
 - The target is still the final count, and lag series can then fall from one lag to the next.
 - Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
@@ -217,7 +234,7 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 ::: {.callout-note title="Plan"}
 - We combine the five layers in every simulation.
 - Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
-- The main text figure compares the grid's summaries with the German development half and other diseases.
+- The main text figure compares the grid's summaries with the German development period and other diseases.
 :::
 
 #### Grid settings and checks
@@ -248,7 +265,7 @@ We test the simulator so that a stratum never has more cases than its population
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
 
-![The simulated outbreaks of the grid's training rounds (grey histograms) against the German development half, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
+![The simulated outbreaks of the grid's training rounds (grey histograms) against the German development period, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
 
 ::: {#tbl-sim-diseases}
 {{< include build/tables/si/sim-diseases.md >}}
@@ -419,7 +436,7 @@ The dashboard was built with the help of a large language model.
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`foundation_real`).
 It was trained on the German data and the BDBV data together.
-The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
+The German part used the data as available on 2022-02-09, the last day of the German development period, and nothing later.
 German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
 Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks.
 The hub file's changes after 80 days hold revisions made up to August 2022, so they were left out.
@@ -805,7 +822,7 @@ We score the country and each province by the CRPS and 90% coverage, and each le
 - We score Chronos-2's trajectories with this copula, with every cell drawn independently, and with one level per trajectory across each series' steps (comonotone), as bounds on the dependence.
 - We score the random walk nowcast's trajectories as submitted.
 - We score trajectories by the energy score on counts and on $\log(x + 1)$ counts.
-- We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.
+- We score trajectories for the Ebola hub only, at the final held-out evaluation.
 - Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
 :::
 
@@ -820,7 +837,7 @@ The copula weight of the walk baselines was set on the Ebola release backtest be
 | Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
 | Copula prior $\rho_0$ | 0.1, the lowest energy score of 0 to 0.9, all within 0.7%; the error window (4 to 16 weeks) and cap (0.9 to 0.99) scored the same | Ebola release backtest |
-| Realism checks of the simulation grid | Grid ranges | German development half and published ranges for other diseases |
+| Realism checks of the simulation grid | Grid ranges | German development period and published ranges for other diseases |
 
 Choices tuned on development data, with their values and the data they were set on.
 :::
@@ -1059,7 +1076,7 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-progress-runa gives its progress over the checkpoints, in the panels every run's progress figure has.
 - Its loss panel gives the trainer's training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.
-- Its German panels give first-half relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
+- Its German panels give development-period relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
 - Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.
 - @tbl-checkpoints gives the headline scores of each checkpoint, and @tbl-live-summary the newest scored checkpoint against zero-shot Chronos-2.
 - A later checkpoint has also trained for more steps.
@@ -1070,13 +1087,13 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 ::: {#tbl-live-summary}
 {{< include build/tables/si/live-summary.md >}}
 
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. @tbl-checkpoints gives every checkpoint. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German development period, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. @tbl-checkpoints gives every checkpoint. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
 
-Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German development period, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Daily nowcasts
@@ -1100,9 +1117,9 @@ German nowcast hub, daily counts: the score panels of the German results figure,
 
 ### Real-data fine-tune against synthetic
 
-- We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
+- We fine-tune a model on the German development period and BDBV releases, and compare it with the model fine-tuned on simulations.
 - Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
-- It saw the German development half, so we score it on the held-out half only.
+- It saw the German development period, so we score it on the test period only.
 - Both use the same recipe and the reporting-triangle layout.
 - @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
 - @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-runa.
@@ -1115,16 +1132,16 @@ German nowcast hub, daily counts: the score panels of the German results figure,
 ::: {#tbl-real-finetune}
 {{< include build/tables/si/real-finetune.md >}}
 
-Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
+Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German test period and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
-### Attention biases for place and parent against none
+### Attention bias setups
 
-- We compare the run with attention biases with a run without them.
-- Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of both runs by checkpoint and level.
-- @fig-progress-noslots gives the run without biases' own progress, as @fig-progress-runa does for the run with them.
-- @tbl-slots-summary gives each run's newest checkpoint.
+- We compare four attention bias setups: all three biases (the main model), no biases, the same-place bias only, and the parent and child biases only.
+- All four runs share the grid, the data order, the LoRA recipe and the checkpoints.
+- @fig-compare-slots shows the trainer's validation loss and German development-period relative scores of each run by checkpoint and level.
+- @fig-progress-noslots, @fig-progress-sameonly and @fig-progress-parentonly give each other run's own progress, as @fig-progress-runa does for the main model.
+- @tbl-slots-summary gives each run's scores at its final checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
@@ -1132,12 +1149,16 @@ Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundat
 
 ![Progress of the run without attention biases (`noslots`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-noslots.png){#fig-progress-noslots}
 
-![Attention biases against none: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Progress of the run with the same-place bias only (`sameonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-sameonly.png){#fig-progress-sameonly}
+
+![Progress of the run with the parent and child biases only (`parentonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-parentonly.png){#fig-progress-parentonly}
+
+![Attention bias setups: the trainer's validation loss and German development-period relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
 
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest checkpoint of each attention bias setup: national WIS on the German development period, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
@@ -1148,15 +1169,15 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 - @fig-progress-nodelays gives the no-delay run's own progress.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
 
-![Delays against no delays: validation loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+![Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
 
 ![Progress of the no-delay run (`nodelays`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-nodelays.png){#fig-progress-nodelays}
 
 ### Impact of correlated trajectories
 
-- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the development simulations, at the national level and for provinces.
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the Ebola hub, at the national level and for provinces.
 - The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
-- The median rolling $\rho_p$ between German states over the first half's nowcasts is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
+- The median rolling $\rho_p$ between provinces is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
 
 ![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
 

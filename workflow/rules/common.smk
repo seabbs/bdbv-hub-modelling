@@ -49,6 +49,9 @@ def ft_check_released(wc=None):
 
     pages = []
     for run in TRAINING.trained_runs():
+        # A real-only run trained on BDBV: its checkpoints have no check.
+        if TRAINING.runs[run].real:
+            continue
         for path in sorted(
             glob.glob(f"{TRAINING.dir}/{run}/train/**/published.json", recursive=True)
         ):
@@ -74,6 +77,8 @@ def ft_check_record(wc):
         return []
     key = wc.fmodel.removeprefix("ft-slots-")
     for run in TRAINING.runs:
+        if TRAINING.runs[run].real:
+            continue
         train = train_dir(run)
         for settings in [
             *glob.glob(f"{train}/n*/settings.json"),
@@ -159,6 +164,14 @@ published_checkpoints = TRAINING.published_checkpoints
 
 wildcard_constraints:
     run="[^/]+",
+
+
+# The runs on real data alone (`data: real`) train with their own rule
+# (rules/realdata.smk, `train_real`), the others with `train_segment`.
+_REAL = "|".join(re.escape(r) for r in TRAINING.real_runs())
+REAL_RUN = f"(?:{_REAL})" if _REAL else "(?!)"
+# A run wildcard is always followed by "/" in the paths.
+SIM_RUN = f"(?!(?:{_REAL})/)[^/]+" if _REAL else "[^/]+"
 
 
 # From score.smk (flowlib.scoring).

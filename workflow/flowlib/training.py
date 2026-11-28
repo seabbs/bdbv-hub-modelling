@@ -265,6 +265,8 @@ class Training:
         if self._next is None:
             seeds: set[int] = set()
             for run in self.trained_runs():
+                if self.runs[run].real:
+                    continue
                 todo = [
                     n for n in self.trainable(run) if not self.saved(run, n)
                 ]
@@ -318,8 +320,29 @@ class Training:
             "settings": f"{sims}/settings-{wc.seed}.csv",
         }
 
+    def real_inputs(self, wc: Any) -> dict[str, Any]:
+        """Return a real run's checkpoint's blocks and the one before.
+
+        Its own run's block files (`runs.real_blocks`) and, after the
+        first, the previous checkpoint, whose state it resumes from.
+        """
+        run, n = self.runs[wc.run], int(wc.n)
+        out: dict[str, Any] = dict(runs.real_blocks(run))
+        if run.prev[n] is not None:
+            out["prev"] = f"{run.train}/n{run.prev[n]}/settings.json"
+        return out
+
+    def real_runs(self) -> list[str]:
+        """Return the runs that train on real data alone."""
+        return [name for name, run in self.runs.items() if run.real]
+
     def trainable(self, run: str) -> list[int]:
-        """Return the prefixes done or within reach of the seed list."""
+        """Return the prefixes done or within reach of the seed list.
+
+        A real run's are all its prefixes: it needs no simulations.
+        """
+        if self.runs[run].real:
+            return list(self.runs[run].ft["prefixes"])
         f = self.runs[run].ft
         return segments.trainable(
             f["prefixes"],
@@ -348,6 +371,13 @@ class Training:
                 self.trainable(run),
             )
             out += [f"{train}/n{n}/settings.json" for n in ns]
+            if there.real:
+                # Its held-out loss is the trainer's, on real data: no
+                # simulated held-out checks, and no BDBV check (BDBV is
+                # in its training data).
+                if self.local["PUBLISH"]:
+                    out += [f"{train}/n{n}/published.json" for n in ns]
+                continue
             # An offloaded run's held-out losses, scored after each segment.
             out += [f for n in ns for f in self.offloaded(run, n)]
             # Each checkpoint's 7-day check (rule seven_day_check).

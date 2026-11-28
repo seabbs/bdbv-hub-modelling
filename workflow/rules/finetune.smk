@@ -79,6 +79,10 @@ rule seed_list:
 
 
 rule train_segment:
+    # The simulation runs; a run on real data alone trains with
+    # `train_real` (rules/realdata.smk).
+    wildcard_constraints:
+        run=SIM_RUN,
     input:
         unpack(segment_inputs),
     output:

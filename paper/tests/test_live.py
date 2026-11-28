@@ -84,7 +84,7 @@ def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
 
     labels = COMPARISONS["slots"][1]
     out = comparison_rows(_scores(), "one-model", "no-slots", labels)
-    assert set(out["run"]) == {"attention biases", "no biases"}
+    assert set(out["run"]) == {"all biases", "no biases"}
     # One set per study and level, not pooled.
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
     assert not any(name.startswith("BDBV") for name in out["set"])
@@ -153,6 +153,36 @@ def test_each_comparison_pairs_the_live_run_with_its_variant() -> None:
     assert comparison_rows(_scores(), "one-model", "nodelays", labels).empty
 
 
+def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
+    """A real-only run's checkpoints n125 and n1000, with no outbreaks."""
+    real = scores.loc[
+        (scores["run"] == "no-slots") & (scores["study"] != "ebola")
+    ]
+    parts = [
+        real.assign(run="realonly", checkpoint=ck, outbreaks=0, rel_wis=wis)
+        for ck, wis in (("n125", 2.5), ("n1000", 2.2))
+    ]
+    return pd.concat([scores, *parts], ignore_index=True)
+
+
+def test_a_run_on_real_data_alone_is_its_final_checkpoint() -> None:
+    # The real-only run has steps, not outbreaks: its final checkpoint is
+    # drawn across the live run's checkpoints, a line to compare with.
+    from paperpipe.evidence import COMPARISONS, comparison_rows
+
+    labels = COMPARISONS["realonly"][1]
+    out = comparison_rows(
+        _real_only(_scores()), "one-model", "realonly", labels
+    )
+    real = out.loc[out["run"] == labels[1]]
+    assert not real.empty
+    assert set(real["outbreaks"]) == {125, 1000}
+    assert set(real["score"]) == {2.2}
+    # Its loss is on real held-out blocks, not the validation round.
+    assert not real["set"].str.startswith("Validation").any()
+    assert set(out.loc[out["run"] == labels[0], "outbreaks"]) == {125, 1000}
+
+
 def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     rows = tmp_path / "scores.csv"
     _scores().to_csv(rows, index=False)
@@ -184,3 +214,73 @@ def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:
     out = comparison_rows(scores, "one-model", "no-slots", labels)
     assert "Validation loss, national" in set(out["set"])
     assert not out["set"].str.startswith("Held-out").any()
+
+
+def _with_subsets() -> pd.DataFrame:
+    """Checkpoint scores with two bias subset runs beside no biases."""
+    rows = _scores()
+    plain = rows.loc[rows["run"] == "no-slots"]
+    return pd.concat(
+        [
+            rows,
+            plain.assign(run="same-only", checkpoint="same"),
+            plain.assign(run="parent-only", checkpoint="parent"),
+        ],
+        ignore_index=True,
+    )
+
+
+PAIRS = {
+    "slots": "no-slots",
+    "sameonly": "same-only",
+    "parentonly": "parent-only",
+}
+
+
+def test_the_attention_bias_setups_are_compared_together() -> None:
+    from paperpipe.evidence import compared, comparison_rows
+
+    others, labels = compared("slots", PAIRS)
+    assert others == ["no-slots", "same-only", "parent-only"]
+    assert labels == (
+        "all biases",
+        "no biases",
+        "same place only",
+        "parent and child only",
+    )
+    out = comparison_rows(_with_subsets(), "one-model", others, labels)
+    assert set(out["run"]) == set(labels)
+    # The subsets join the slots comparison only.
+    assert compared("delays", PAIRS | {"delays": "nodelays"})[0] == ["nodelays"]
+
+
+def test_the_bias_summary_has_a_row_per_setup_scored() -> None:
+    from paperpipe.evidence import compared, slots_summary
+
+    others, labels = compared("slots", PAIRS)
+    out = slots_summary(_with_subsets(), "one-model", others, labels)
+    assert list(out["Run"]) == ["Zero-shot", *labels]
+    # A setup not yet scored has no row.
+    out = slots_summary(_scores(), "one-model", others, labels)
+    assert list(out["Run"]) == ["Zero-shot", "all biases", "no biases"]
+
+
+def test_the_bias_setups_share_the_slots_figure_and_table(tmp_path) -> None:
+    rows = tmp_path / "scores.csv"
+    _with_subsets().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"checkpoint_scores": rows}
+    numbers = write_evidence(
+        paths,
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+        run="one-model",
+        comparisons=PAIRS,
+    )
+    summary = (tmp_path / "si" / "slots-summary.md").read_text()
+    assert "same place only" in summary
+    assert "parent and child only" in summary
+    assert not (tmp_path / "fig" / "compare-sameonly.png").exists()
+    from paperpipe.evidence import COMPARISONS
+
+    assert COMPARISONS["slots"][0] not in numbers["evidence"]["waiting"]

@@ -1,11 +1,22 @@
-"""German real-data training blocks, for the real-data ablation.
+"""German real-data training blocks, for the real-data runs.
 
-The German hub triangle cut into training blocks as the German tasks lay
-it out, from reports before the first scored German date only
-(`window`), so the real-data run is never scored on what it trained on.
-Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT
---first-date D --truth-delay N`, the window's two settings from
-`packages/nowcastgermany/config/germany.toml` (rule real_training_blocks).
+Two runs read them (workflow/config.yaml `runs`):
+
+- `realdata` mixes them into Run A's simulations: the German hub triangle
+  cut into training blocks as the German tasks lay it out, from reports
+  before the first scored German date only (`window`). Run as `python -m
+  nowcastgermany.finetune_blocks TRIANGLE OUT --first-date D
+  --truth-delay N`, the window's two settings from
+  `packages/nowcastgermany/config/germany.toml` (rule
+  real_training_blocks).
+- `realonly` trains on real data alone (`foundation_real`): each nowcast
+  date's German tasks, as the benchmark builds them
+  (`data.nowcast_tasks`), laid out as the fine-tuned model forecasts them
+  (`finetune.realtasks`), from the data as available on the last day of
+  the development half (`realdata_window`, the table `[realdata_germany]`
+  of packages/nowcastfoundation/config/finetune.toml). Run as `python -m
+  nowcastgermany.finetune_blocks TRIANGLE OUT --realdata` (rule
+  realonly_blocks_germany).
 """
 
 from __future__ import annotations
@@ -13,14 +24,18 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import pickle
+import tomllib
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from nowcastfoundation.finetune import AHEAD_WEEKS, training_block
 from nowcastfoundation.finetune import chronos as ft
+from nowcastfoundation.finetune import realtasks as rt
 from nowcastgermany import data as de
 from nowcastutils.base import NATIONAL
 
@@ -198,18 +213,160 @@ def make_blocks(
     return len(blocks)
 
 
+FINETUNE_CONFIG = ft.ROOT / "packages/nowcastfoundation/config/finetune.toml"
+"""The fine-tuning settings, with the real-data window `[realdata_germany]`."""
+
+GERMANY_CONFIG = ft.ROOT / "packages/nowcastgermany/config/germany.toml"
+"""The benchmark's settings: its tasks' horizons (`forecast_days`)."""
+
+MAX_DELAY = 80
+"""The longest delay kept, in days: the hub's change after 80 days holds
+revisions made up to August 2022, so it is left out."""
+
+
+@dataclass(frozen=True)
+class RealdataWindow:
+    """The German data the real-data checkpoint trains on.
+
+    Attributes
+    ----------
+    as_of : str
+        The last report date used: the last day of the development half.
+    truth_delay : int
+        Days a count must have had by `as_of` to be truth.
+    first_cut : str
+        The first nowcast date cut.
+    held_out_dates : int
+        The latest nowcast dates held out to monitor the loss.
+    """
+
+    as_of: str
+    truth_delay: int
+    first_cut: str
+    held_out_dates: int
+
+    @property
+    def truth_until(self) -> str:
+        """The last Meldedatum complete for `truth_delay` days by `as_of`."""
+        day = dt.date.fromisoformat(self.as_of)
+        return (day - dt.timedelta(days=self.truth_delay)).isoformat()
+
+    def cuts(self) -> list[str]:
+        """Every nowcast date from `first_cut` with its truth by then."""
+        return cut_dates(self.first_cut, self.truth_until)
+
+
+def realdata_window(path: Path | str = FINETUNE_CONFIG) -> RealdataWindow:
+    """Return the real-data checkpoint's German window.
+
+    Read from the table `[realdata_germany]` of the fine-tuning settings.
+    """
+    raw = tomllib.loads(Path(path).read_text())["realdata_germany"]
+    return RealdataWindow(
+        as_of=str(raw["as_of"]),
+        truth_delay=int(raw["truth_delay"]),
+        first_cut=str(raw["first_cut"]),
+        held_out_dates=int(raw["held_out_dates"]),
+    )
+
+
+def task_horizons(path: Path | str = GERMANY_CONFIG) -> tuple[int, ...]:
+    """Return the horizons the checkpoint units forecast each date at.
+
+    `forecast_days` ahead down to the hub's last nowcast horizon, as
+    `nowcastgermany.evaluation.load_germany_config` reads them.
+    """
+    days = int(
+        tomllib.loads(Path(path).read_text())["nowcast"]["forecast_days"]
+    )
+    return tuple(range(days, min(de.HORIZONS) - 1, -1))
+
+
+def realdata_triangle(path: Path | str, as_of: str) -> pd.DataFrame:
+    """Return the hub triangle as available on `as_of`.
+
+    The counts by Meldedatum and report date (`data.hub_triangle`), those
+    reported by `as_of` and at most `MAX_DELAY` days after their date.
+    """
+    tri = de.within_delay(de.hub_triangle(path), MAX_DELAY)
+    return tri.loc[tri["report_date"] <= as_of].reset_index(drop=True)
+
+
+def realdata_blocks(
+    triangle: pd.DataFrame,
+    window: RealdataWindow,
+    cuts: list[str] | None = None,
+    block_limit: int = rt.BLOCK_LIMIT,
+    seed: int = 1,
+) -> list[dict[str, Any]]:
+    """Return the real-data checkpoint's German blocks, in cut order.
+
+    Each nowcast date's tasks (`data.nowcast_tasks`: Germany with its
+    states, and Germany with its age groups), laid out as the fine-tuned
+    model forecasts them (`finetune.realtasks.task_blocks`), with the
+    counts as available on `window.as_of` as the truth, to
+    `window.truth_until`.
+    """
+    horizons = task_horizons()
+    model = rt.real_model(block_limit)
+    truths = [
+        rt.truth_of(model, task, window.truth_until)
+        for task in de.nowcast_tasks(triangle, window.as_of, 1, seed, horizons)
+    ]
+    rng = np.random.default_rng(seed)
+    out = []
+    for cut in cuts if cuts is not None else window.cuts():
+        tasks = de.nowcast_tasks(triangle, cut, 1, seed, horizons)
+        for task, truth in zip(tasks, truths, strict=True):
+            out += rt.task_blocks(
+                model, task, truth, rng, data="germany", mix="germany", cut=cut
+            )
+    return out
+
+
+def make_realdata_blocks(
+    path: Path,
+    out: Path,
+    window: RealdataWindow,
+    block_limit: int = rt.BLOCK_LIMIT,
+) -> int:
+    """Cut the real-data checkpoint's German blocks and pickle them."""
+    triangle = realdata_triangle(path, window.as_of)
+    blocks = realdata_blocks(triangle, window, block_limit=block_limit)
+    with out.open("wb") as f:
+        pickle.dump(blocks, f)
+    cuts = window.cuts()
+    print(
+        f"{len(blocks)} blocks of {len(cuts)} nowcast dates {cuts[0]} to "
+        f"{cuts[-1]}, reports to {window.as_of}, truth to "
+        f"{window.truth_until}: {out}",
+        flush=True,
+    )
+    return len(blocks)
+
+
 def main() -> None:
     """Cut the German blocks of the window the options give."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("triangle", type=Path)
     parser.add_argument("out", type=Path)
-    # The first scored German nowcast date and the benchmark's truth
-    # delay (`packages/nowcastgermany/config/germany.toml`
+    # The real-data checkpoint's window (`realdata_window`), or the mixed
+    # run's: the first scored German nowcast date and the benchmark's
+    # truth delay (`packages/nowcastgermany/config/germany.toml`
     # `nowcast.first_date`, `truth.delay`).
-    parser.add_argument("--first-date", required=True)
-    parser.add_argument("--truth-delay", type=int, required=True)
+    parser.add_argument("--realdata", action="store_true")
+    parser.add_argument("--block-limit", type=int, default=rt.BLOCK_LIMIT)
+    parser.add_argument("--first-date")
+    parser.add_argument("--truth-delay", type=int)
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
+    if args.realdata:
+        make_realdata_blocks(
+            args.triangle, args.out, realdata_window(), args.block_limit
+        )
+        return
+    if args.first_date is None or args.truth_delay is None:
+        parser.error("give --realdata, or --first-date and --truth-delay")
     make_blocks(
         args.triangle,
         args.out,

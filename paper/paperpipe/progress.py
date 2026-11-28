@@ -187,6 +187,25 @@ def _bdbv_panel(ax: Axes, rows: pd.DataFrame | None) -> None:
     ax.legend(frameon=False, fontsize=6)
 
 
+def _by_share(horizons: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """Put a run on real data alone on the axis of its share of passes.
+
+    Its checkpoints have no outbreaks, and their labels `n<N>` are
+    thousandths of its passes, which become their `outbreaks`. Any other
+    run is returned as it is.
+    """
+    if "checkpoint" not in horizons:
+        return horizons, False
+    tuned = horizons["checkpoint"].astype(str) != "zero-shot"
+    if not tuned.any() or (horizons.loc[tuned, "outbreaks"] > 0).any():
+        return horizons, False
+    out = horizons.copy()
+    out.loc[tuned, "outbreaks"] = (
+        out.loc[tuned, "checkpoint"].astype(str).str[1:].astype(int)
+    )
+    return out, True
+
+
 def progress_figure(
     loss: pd.DataFrame,
     horizons: pd.DataFrame,
@@ -238,9 +257,10 @@ def progress_figure(
         ax = rows[1].subplots()
         _waiting(ax, "No German checkpoint scores yet")
         return fig
+    horizons, share = _by_share(horizons)
     for i, part in enumerate(parts):
         sub = rows[1 + i]
         one = horizons.loc[horizons["horizons"] == part]
-        checkpoint_figure(one, fig=sub, legend=i == len(parts) - 1)
+        checkpoint_figure(one, fig=sub, legend=i == len(parts) - 1, share=share)
         sub.suptitle(HORIZON_TITLES[part], fontsize=9)
     return fig

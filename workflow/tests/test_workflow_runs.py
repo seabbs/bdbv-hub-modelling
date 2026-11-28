@@ -20,8 +20,11 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
     assert list(cfg["runs"]) == [
         "runa",
         "noslots",
+        "sameonly",
+        "parentonly",
         "nodelays",
         "realdata",
+        "realonly",
         "runb",
     ]
 
@@ -51,6 +54,29 @@ def test_the_no_slots_run_is_run_a_without_the_attention_biases():
         k: v for k, v in b.items() if k != "series_bias"
     }
     assert "--series-bias" not in runs.trainer_options(found["noslots"])
+
+
+@pytest.mark.parametrize(
+    ("name", "pairs"), [("sameonly", "same"), ("parentonly", "up down")]
+)
+def test_the_bias_subset_runs_are_run_a_with_some_biases(name, pairs):
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    a, b = found["runa"].ft, found[name].ft
+    assert b["series_bias"]
+    assert {k: v for k, v in a.items() if k != "bias_pairs"} == {
+        k: v for k, v in b.items() if k != "bias_pairs"
+    }
+    got = runs.trainer_options(found[name])
+    assert f"--series-bias --bias-lr {b['bias_lr']} --bias-pairs {pairs}" in got
+    assert "--bias-pairs" not in runs.trainer_options(found["runa"])
+
+
+def test_bias_pairs_without_the_bias_are_refused():
+    cfg = runs.load_config()
+    cfg["runs"] = {"x": {"series_bias": False, "bias_pairs": ["same"]}}
+    with pytest.raises(ValueError, match="bias_pairs"):
+        runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
 
 
 def test_a_run_takes_the_finetune_defaults_and_its_overrides():
