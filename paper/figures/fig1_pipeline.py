@@ -13,7 +13,8 @@ The panels are:
   one icon each;
 - B, the model inputs (`nowcastfoundation.forecaster.layout_block`):
   each place's target, lag series and weekly row in one block, the lag
-  series reported so far entering as known-future inputs;
+  series reported so far entering as known-future inputs, and a map of
+  the places, each in its own colour as in C;
 - C, a training block cut from a simulated release history
   (`nowcastfoundation.finetune.training_block`) and the LoRA adapters,
   and below them the attention biases (`nowcastfoundation.series_bias`)
@@ -56,6 +57,9 @@ TRUTH_SOFT = "#d4eee3"
 SLOTS = ("#6f42c1", "#c0397a")
 PARENT_SLOT = "#2f7d4f"
 CHILD_SLOT = COV
+# One colour per place, the same in panels B and C, apart from the
+# relation colours.
+PLACE = {"C": "#d1495b", "A": "#1596a8", "B": "#e3a21a"}
 
 # Body text, small notes and headings, in points.
 BODY = 7.5
@@ -315,15 +319,44 @@ def _area(
 
 
 def _node(
-    g: Svg, x: float, y: float, r: float, text: str = "", fill: str = "white"
+    g: Svg,
+    x: float,
+    y: float,
+    r: float,
+    text: str = "",
+    fill: str = "white",
+    ink: str = FG,
+    stroke: str = FG,
 ) -> None:
     """Draw a place as a circle, with its letter."""
     g.add(
         f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{fill}" '
-        f'stroke="{FG}" stroke-width="0.8"/>'
+        f'stroke="{stroke}" stroke-width="0.8"/>'
     )
     if text:
-        g.text(x, y + 2.8, text, size=HEAD, anchor="middle", weight="bold")
+        g.text(
+            x,
+            y + 2.8,
+            text,
+            size=HEAD,
+            anchor="middle",
+            weight="bold",
+            fill=ink,
+        )
+
+
+def _places(
+    g: Svg, cx: float, top: float, dx: float, dy: float, r: float
+) -> dict[str, tuple[float, float]]:
+    """Draw country C over places A and B in their colours; return them."""
+    at = {"C": (cx, top + r), "A": (cx - dx, top + r + dy)}
+    at["B"] = (cx + dx, top + r + dy)
+    for k in ("A", "B"):
+        a, b = _toward(at[k], at["C"], r), _toward(at["C"], at[k], r)
+        g.line(*a, *b, stroke=LINE, sw=0.8)
+    for name, (x, y) in at.items():
+        _node(g, x, y, r, name, fill=PLACE[name], ink="white", stroke="white")
+    return at
 
 
 def _glyph(g: Svg, i: int, cx: float, cy: float) -> None:
@@ -394,9 +427,9 @@ def _block(
 def panel_b(g: Svg, oy: float) -> float:
     """Draw panel B, every place's series in one block."""
     g.label(0, oy + 9, "B", "Model inputs")
-    # Days 1 to 14, the latest release on day 11 and a maximum delay of
-    # three days, so the last complete day is day 8.
-    cols, latest, lags = 14, 11, 3
+    # Days 1 to 10, the latest release on day 8 and a maximum delay of
+    # three days, so the last complete day is day 5.
+    cols, latest, lags = 10, 8, 3
     last = latest - lags
     bw, rh = 21.0, 7.0
     bx, by = 66.0, oy + 30
@@ -409,12 +442,14 @@ def panel_b(g: Svg, oy: float) -> float:
         bottom = _block(
             g, bx, y, cols, bw, rh, lag_rows(cols, latest, last, lags)
         )
-        # The weekly row: each week's total, complete or to forecast.
+        # The weekly row: the week to the last complete day, and the
+        # week after it to forecast.
         wy = bottom + 3
-        for k in range(cols // 7):
-            kind = "final" if 7 * (k + 1) <= last else "future"
-            cell(g, bx + 7 * k * bw, wy, 7 * bw, rh, kind)
+        w0 = max(0, last - 7)
+        cell(g, bx + w0 * bw, wy, (last - w0) * bw, rh, "final")
+        cell(g, bx + last * bw, wy, (cols - last) * bw, rh, "future")
         place_bottom = wy + rh
+        g.rect(16, y, 2.5, place_bottom - y, fill=PLACE[place], rx=1)
         g.text(
             6,
             (y + place_bottom) / 2 + 3,
@@ -422,6 +457,7 @@ def panel_b(g: Svg, oy: float) -> float:
             size=11,
             weight="bold",
             anchor="middle",
+            fill=PLACE[place],
         )
         if p == 0:
             ys = [y + k * (rh + 1) + (2 if k else 0) for k in range(lags + 1)]
@@ -494,6 +530,8 @@ def panel_b(g: Svg, oy: float) -> float:
         ly_ = tops[2] + 10 + 13 * k
         cell(g, lx, ly_ - 6.5, 9, 7.5, kind)
         g.text(lx + 13, ly_, name, size=SMALL)
+    # The places, on the right.
+    _places(g, WIDTH - 76, tops[1] - 4, 22.0, 30.0, 8.0)
     return bottom + 14
 
 
@@ -502,20 +540,19 @@ RELATIONS = (
     ("same", "same place", SLOTS[0]),
     ("up", "up (child \u2192 parent)", PARENT_SLOT),
     ("down", "down (parent \u2192 child)", CHILD_SLOT),
-    ("itself", "itself (no bias)", "white"),
-    ("none", "unrelated (no bias)", CELL),
+    ("none", "no bias", CELL),
 )
 
 
 def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
     """Return the relation of a query row to a key column of the toy block.
 
-    Places A and B are children of the country C. A row and itself have
-    no bias, drawn apart from the same-place pairs around them.
+    Places A and B are children of the country C. A series has no bias
+    to itself, as `series_bias.pair_masks` has it.
     """
     (p, i), (q, j) = row, col
     if p == q:
-        return "same" if i != j else "itself"
+        return "same" if i != j else "none"
     if q == "C":
         return "up"
     if p == "C":
@@ -538,7 +575,7 @@ def _arc(
     qx, qy = mx + bend * dy / n, my - bend * dx / n
     g.add(
         f'<path d="M{a[0]:.2f},{a[1]:.2f} Q{qx:.2f},{qy:.2f} '
-        f'{b[0]:.2f},{b[1]:.2f}" stroke="{colour}" stroke-width="1.0" '
+        f'{b[0]:.2f},{b[1]:.2f}" stroke="{colour}" stroke-width="1.2" '
         f'fill="none" marker-end="url(#{arrow})"/>'
     )
 
@@ -563,77 +600,81 @@ def attention_biases(g: Svg, oy: float) -> float:
     )
     top = oy + 16
     # The map: country C over places A and B, with the up and down
-    # relations between them as arrows.
-    r = 8.0
-    c = (44.0, top + 14)
-    kids = {"A": (18.0, top + 58), "B": (70.0, top + 58)}
+    # relations between them as arrows in the grid's colours.
+    r = 9.0
+    c = (48.0, top + 22)
+    kids = {"A": (20.0, top + 72), "B": (76.0, top + 72)}
     for k in kids.values():
         lo = _toward(k, c, r + 1.5)
         hi = _toward(c, k, r + 1.5)
-        _arc(g, lo, hi, 4.5, PARENT_SLOT, "ahup")
-        _arc(g, hi, lo, 4.5, CHILD_SLOT, "ahdown")
+        _arc(g, lo, hi, 5.0, PARENT_SLOT, "ahup")
+        _arc(g, hi, lo, 5.0, CHILD_SLOT, "ahdown")
+    g.text(17, top + 42, "up", size=SMALL, fill=PARENT_SLOT, anchor="end")
+    g.text(79, top + 42, "down", size=SMALL, fill=CHILD_SLOT)
     for name, (x, y) in [("C", c), *kids.items()]:
-        _node(g, x, y, r, name)
-    # The grid: group attention at one step, rows attending to columns.
+        _node(g, x, y, r, name, fill=PLACE[name], ink="white", stroke="white")
+    # The grid: group attention at one step, rows attending to columns,
+    # with each place's target and two lag series.
     places = ("C", "A", "B")
-    n_series = 3
-    rows = [(p, k) for p in places for k in range(n_series)]
-    cs = 8.0
-    gx, gy = 132.0, top + 9
-    g.text(
-        gx + cs * len(rows) / 2,
-        top + 1,
-        "at one step, rows attend to columns",
-        size=SMALL,
-        anchor="middle",
-        fill=MUTED,
-    )
-    colour = {key: c for key, _, c in RELATIONS}
+    series = ("target", "lag 0", "lag 1")
+    n = len(series)
+    rows = [(p, k) for p in places for k in range(n)]
+    cs = 9.0
+    gx, gy = 170.0, top + 30
+    span = len(rows) * cs
+    colour = {key: c_ for key, _, c_ in RELATIONS}
     for a, row in enumerate(rows):
         for b, col in enumerate(rows):
-            rel = _relation(row, col)
             g.rect(
                 gx + b * cs + 0.4,
-                gy + 9 + a * cs + 0.4,
+                gy + a * cs + 0.4,
                 cs - 0.8,
                 cs - 0.8,
-                fill=colour[rel],
+                fill=colour[_relation(row, col)],
                 rx=1,
-                stroke=LINE if rel == "itself" else "none",
-                sw=0.6,
             )
+    lab = SMALL - 1
     for k, p in enumerate(places):
-        mid = n_series * cs * (k + 0.5)
-        g.text(gx + mid, gy + 6, p, size=SMALL, anchor="middle", weight="bold")
+        lo = k * n * cs
+        # Each place's columns and rows, under its colour.
+        g.rect(gx + lo + 0.4, gy - 28, n * cs - 0.8, 2.5, fill=PLACE[p], rx=1)
         g.text(
-            gx - 4,
-            gy + 9 + mid + 2.5,
+            gx + lo + n * cs / 2,
+            gy - 31,
+            p,
+            size=SMALL,
+            anchor="middle",
+            weight="bold",
+            fill=PLACE[p],
+        )
+        g.rect(gx - 34, gy + lo + 0.4, 2.5, n * cs - 0.8, fill=PLACE[p], rx=1)
+        g.text(
+            gx - 37,
+            gy + lo + n * cs / 2 + 2.5,
             p,
             size=SMALL,
             anchor="end",
             weight="bold",
+            fill=PLACE[p],
         )
-    grid_bottom = gy + 9 + len(rows) * cs
+        for i, name in enumerate(series):
+            mid = lo + (i + 0.5) * cs
+            g.text(
+                gx - 3, gy + mid + 2, name, size=lab, anchor="end", fill=MUTED
+            )
+            x, y = gx + mid + 2, gy - 3
+            g.add(
+                f'<text x="{x:.2f}" y="{y:.2f}" font-size="{lab}" '
+                f'fill="{MUTED}" transform="rotate(-90 {x:.2f} {y:.2f})">'
+                f"{name}</text>"
+            )
     # The relations, one a line, beside the grid.
-    lx = gx + len(rows) * cs + 22
-    for k, (key, name, c_) in enumerate(RELATIONS):
-        y = gy + 11 + k * 12
-        edge = LINE if key == "itself" else "none"
-        g.rect(lx, y - 7, 9, 7.5, fill=c_, rx=1, stroke=edge, sw=0.6)
+    lx = gx + span + 24
+    for k, (_, name, c_) in enumerate(RELATIONS):
+        y = gy + 8 + k * 13
+        g.rect(lx, y - 7, 9, 7.5, fill=c_, rx=1)
         g.text(lx + 13, y, name, size=SMALL)
-    g.text(
-        lx + 128,
-        gy + 11,
-        [
-            "one learned bias per",
-            "relation, layer and head,",
-            "added to the attention",
-            "scores",
-        ],
-        size=SMALL,
-        fill=MUTED,
-    )
-    return max(grid_bottom, top + 58 + r)
+    return max(gy + span, top + 72 + r)
 
 
 def panel_c(g: Svg, oy: float) -> float:

@@ -120,12 +120,12 @@ finetune:
   # without their lag series, so the context ends at the last complete
   # step). Ragged adds nothing to the settings hash.
   layout: ragged
-  # The release layer's file (null: none): late release starts and the
-  # release cadences, drawn per block at fine-tune time from the
-  # simulations already made
-  # (packages/nowcastfoundation/config/finetune/release-layer.yaml, a
-  # proposal). Unset adds nothing to the settings hash.
-  release_layer: null
+  # The release layer's file (null: none): late release starts, blocks
+  # with no lag series, lag count jitter and the release cadences, drawn
+  # per block at fine-tune time from the simulations already made
+  # (packages/nowcastfoundation/config/finetune/release-layer.yaml). Part
+  # of the recipe, so every run trains with it.
+  release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml
   # Real-data blocks mixed into the training stream, spread over its
   # chunks (null: none). `germany`: the German triangle's reports before
   # the first scored German date (packages/nowcastgermany/config/germany.toml),
@@ -156,47 +156,41 @@ finetune:
 # and keeps its files in <ROOT>/runs/<name>/ (flowlib.runs). Every run
 # takes the same rules through the {run} wildcard.
 runs:
-  runa: {}
-  # Run A without the attention biases (the paper's slots comparison,
-  # paper/workflow/config.yaml `comparisons`).
-  noslots: {series_bias: false}
-  # Run A with only some of the attention biases: the same-place bias
-  # alone, and the parent and child biases alone (the paper's attention
-  # bias setups, with noslots).
-  sameonly: {bias_pairs: [same]}
-  parentonly: {bias_pairs: [up, down]}
-  # Run A on complete counts, without lag series (the paper's delays
-  # comparison).
+  # The fine-tuned model.
+  finetuned: {}
+  # The recipe without the attention biases (the paper's attention bias
+  # setups, paper/workflow/config.yaml `comparisons`).
+  nobiases: {series_bias: false}
+  # The recipe with only some of the attention biases: the same-place
+  # bias alone, and the parent and child biases alone.
+  sameplace: {bias_pairs: [same]}
+  parentchild: {bias_pairs: [up, down]}
+  # The recipe on complete counts, without delay information.
   nodelays: {layout: complete}
-  # Run A with the German real-data blocks mixed in: simulations and
-  # German data (the paper's `realdata` comparison). Not the real-only
-  # run below.
-  realdata: {real_training: germany}
   # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
-  # "Fine-tuning on real data"): Run A's recipe, layout and attention
-  # biases on the German development half and the BDBV releases. It
-  # trains in passes to Run A's steps (its final checkpoint's 82,040,
-  # chronos-slots-66a7a630d729), at most 20 passes, with checkpoints at
-  # 1/8, 1/4, 1/2 and all of them; the final one is reported, with no
-  # choice on real data. Its final checkpoint is released as realdata-ft-<hash>, which `realdata` in
-  # packages/nowcastfoundation/config/finetune.toml pins. One target
-  # cuts, trains, scores and publishes it: `task workflow:finetune-realonly`
-  # (rule finetune_realonly). The paper's `realonly` comparison.
-  realonly:
+  # "Fine-tuning on real data"): the recipe, layout and attention biases
+  # on the German development half and the BDBV releases. It trains in
+  # passes to the fine-tuned model's steps (`target_steps`, still the old
+  # main run's final 82,040 until the retrained `finetuned` run's final
+  # checkpoint lands), at most 20 passes, with checkpoints at 1/8, 1/4,
+  # 1/2 and all of them; the final one is reported, with no choice on
+  # real data. Its final checkpoint is released as realdata-ft-<hash>,
+  # which `realdata` in packages/nowcastfoundation/config/finetune.toml
+  # pins. One target cuts, trains, scores and publishes it:
+  # `task workflow:finetune-realdata` (rule finetune_realdata). Not in
+  # `train_runs`.
+  realdata:
     data: real
     prefixes: [125, 250, 500, 1000]
     target_steps: 82040
     max_passes: 20
     eval: local
     note: real data alone, German development half and BDBV releases
-  # Run B: Run A's recipe with the release
-  # layer (late release starts and the weekly-release share).
-  runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
 
 # The runs `finetune` trains, scores and reports on (null: every run in
 # `runs`), each on a GPU of its own when there are enough, else in this
 # order. A run's saved segments are not trained again.
-train_runs: [runa, noslots]
+train_runs: [finetuned, nobiases, sameplace, parentchild, nodelays]
 
 # The device and CPU threads of every forecasting job: checkpoint scoring
 # (the German units), held-out evaluation, backtests (German, Ebola), hub
@@ -212,9 +206,11 @@ score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
   # Only checkpoints of the current run, released after this time, are
-  # scored. Earlier checkpoints' cached rows stay in the tables.
+  # scored. Earlier checkpoints' cached rows stay in the tables. Set after
+  # the runs were renamed and the release layer joined the recipe, so no
+  # checkpoint of the old runs is scored.
   labels: null
-  published_from: "2026-11-19T15:00:00Z"
+  published_from: "2026-11-28T00:00:00Z"
   # Checkpoints left out, by label.
   skip: []
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
@@ -278,11 +274,11 @@ dashboard:
   # (`paper_model`, default the fine-tuned model) then ", <variant>".
   # A run not named here is "<model> - <its grid> grid".
   run_names:
-    noslots: {variant: no attention bias}
+    nobiases: {variant: no attention biases}
+    sameplace: {variant: same place only}
+    parentchild: {variant: parent and child only}
     nodelays: {paper_model: foundation_complete}
-    realdata: {variant: synthetic and German data}
-    realonly: {paper_model: foundation_real}
-    runb: {variant: release layer}
+    realdata: {paper_model: foundation_real}
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]
   # [,role=..]). Role: baseline (scores are relative to it), start (each

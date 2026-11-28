@@ -59,17 +59,17 @@ def test_settings_say_whether_a_run_has_the_series_bias(tmp_path):
 
 
 def test_a_run_without_the_series_bias_is_named_not_drawn(tmp_path):
-    _run(tmp_path / "runa", BIAS)
-    _run(tmp_path / "noslots", {})
+    _run(tmp_path / "finetuned", BIAS)
+    _run(tmp_path / "nobiases", {})
     rs = [
         runs.make_run(
-            "noslots", tmp_path / "noslots", label="No bias", live=True
+            "nobiases", tmp_path / "nobiases", label="No bias", live=True
         ),
-        runs.make_run("runa", tmp_path / "runa", label="With bias"),
+        runs.make_run("finetuned", tmp_path / "finetuned", label="With bias"),
     ]
     got = bias.payload(rs, live_step=150)
-    assert [r["key"] for r in got["runs"]] == ["runa"]
-    assert got["nobias"] == [{"key": "noslots", "label": "No bias"}]
+    assert [r["key"] for r in got["runs"]] == ["finetuned"]
+    assert got["nobias"] == [{"key": "nobiases", "label": "No bias"}]
     assert got["missing"] == []
     # The run with the bias is as it was alone.
     alone = bias.payload(rs[1:], live_step=None)
@@ -78,12 +78,12 @@ def test_a_run_without_the_series_bias_is_named_not_drawn(tmp_path):
 
 
 def test_only_runs_without_the_series_bias_give_no_panels(tmp_path):
-    _run(tmp_path / "noslots", {}, history=False)
-    rs = [runs.make_run("noslots", tmp_path / "noslots", live=True)]
+    _run(tmp_path / "nobiases", {}, history=False)
+    rs = [runs.make_run("nobiases", tmp_path / "nobiases", live=True)]
     got = bias.payload(rs, live_step=150)
     assert got["runs"] == []
     assert got["pairs"] == []
-    assert [r["key"] for r in got["nobias"]] == ["noslots"]
+    assert [r["key"] for r in got["nobias"]] == ["nobiases"]
 
 
 def _plan(data, on, lr):
@@ -108,16 +108,16 @@ def _plan(data, on, lr):
 
 
 DATA = {
-    "runs": [{"key": "runa", "label": "With bias"}],
+    "runs": [{"key": "finetuned", "label": "With bias"}],
     "missing": [{"key": "fresh", "label": "Fresh"}],
-    "nobias": [{"key": "noslots", "label": "No bias"}],
+    "nobias": [{"key": "nobiases", "label": "No bias"}],
 }
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 def test_a_selected_run_without_the_bias_gets_a_one_line_note():
-    got = _plan(DATA, ["noslots", "runa"], "noslots")
-    assert [r["key"] for r in got["runs"]] == ["runa"]
+    got = _plan(DATA, ["nobiases", "finetuned"], "nobiases")
+    assert [r["key"] for r in got["runs"]] == ["finetuned"]
     assert got["notes"] == ["No bias: no attention bias in this run"]
     # The learning rate is the no-bias run's, so it is not drawn here.
     assert got["lr"] is False
@@ -125,7 +125,7 @@ def test_a_selected_run_without_the_bias_gets_a_one_line_note():
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 def test_only_runs_without_the_bias_collapse_to_the_note():
-    got = _plan(DATA, ["noslots"], "noslots")
+    got = _plan(DATA, ["nobiases"], "nobiases")
     assert got["runs"] == []
     assert got["notes"] == ["No bias: no attention bias in this run"]
     assert got["lr"] is False
@@ -133,11 +133,11 @@ def test_only_runs_without_the_bias_collapse_to_the_note():
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 def test_a_run_with_the_bias_keeps_its_learning_rate():
-    got = _plan(DATA, ["runa", "fresh"], "runa")
-    assert [r["key"] for r in got["runs"]] == ["runa"]
+    got = _plan(DATA, ["finetuned", "fresh"], "finetuned")
+    assert [r["key"] for r in got["runs"]] == ["finetuned"]
     assert got["notes"] == ["Fresh: no attention bias logged or saved yet"]
     assert got["lr"] is True
-    assert _plan(DATA, ["noslots"], "runa")["lr"] is False
+    assert _plan(DATA, ["nobiases"], "finetuned")["lr"] is False
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")

@@ -74,7 +74,7 @@ def _unit(
 def _units(tmp_path: Path, last: str = "2021-11-23") -> tuple[Path, Path]:
     dates = ("2021-11-22", last)
     reference = _unit(tmp_path / "scores" / "reference", dates, REFERENCE)
-    checkpoint = _unit(tmp_path / "runa" / "n4800", dates, CHECKPOINT)
+    checkpoint = _unit(tmp_path / "finetuned" / "n4800", dates, CHECKPOINT)
     return reference, checkpoint
 
 
@@ -120,7 +120,7 @@ def test_a_unit_with_a_held_out_date_is_refused(tmp_path: Path) -> None:
 
 
 def _record(tmp_path: Path, tag: str = "chronos-slots-66a7a630d729") -> Path:
-    path = tmp_path / "runa" / "train" / "n4800" / "published.json"
+    path = tmp_path / "finetuned" / "train" / "n4800" / "published.json"
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"tag": tag, "hash": tag.rsplit("-", 1)[1]}))
     return path

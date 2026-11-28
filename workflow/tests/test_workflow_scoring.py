@@ -15,11 +15,12 @@ def test_a_unit_scores_and_stamps():
 
 
 def test_the_report_names_the_references_and_saved_checkpoints():
-    got = scoring.report_args("runa", [100, 200], ["reference"], "/c/g")
+    got = scoring.report_args("finetuned", [100, 200], ["reference"], "/c/g")
     assert got == (
         "reference=Zero-shot "
         "'randomwalknowcast=Random walk nowcast' "
-        "'n100=runa n100' 'n200=runa n200' --from reference=/c/g/reference"
+        "'n100=finetuned n100' 'n200=finetuned n200' "
+        "--from reference=/c/g/reference"
     )
 
 

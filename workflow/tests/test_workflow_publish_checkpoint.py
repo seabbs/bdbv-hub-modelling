@@ -118,8 +118,8 @@ def test_the_main_run_s_checkpoint_is_promoted(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["x", "--main", "runa", str(tmp_path), str(out), "main", "next"],
+        ["x", "--main", "finetuned", str(tmp_path), str(out), "main", "next"],
     )
     publish_checkpoint.main()
-    assert calls == [(tmp_path, "runa", ("main", "next"))]
+    assert calls == [(tmp_path, "finetuned", ("main", "next"))]
     assert json.loads(out.read_text())["tag"] == "chronos-ft-abc"

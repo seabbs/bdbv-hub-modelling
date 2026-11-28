@@ -39,13 +39,13 @@ def test_promoting_writes_the_record_to_the_stable_release(
     fake_releases,
 ) -> None:
     gh = fake_releases({"thing-abc": {"data.tar.gz": ""}})
-    record = _promote(gh, needs="data.tar.gz", extra={"run": "runa"})
+    record = _promote(gh, needs="data.tar.gz", extra={"run": "finetuned"})
     assert record["endpoint"] == "thing"
     assert record["tag"] == "thing-abc"
     assert record["hash"] == "abc123"
     assert record["commit"] == gh.head
     assert record["produced_by"] == "rule make_thing"
-    assert record["run"] == "runa"
+    assert record["run"] == "finetuned"
     assert record["promoted_at"]
     stored = json.loads(gh.releases["thing-main"][pointers.ASSET])
     assert stored == record

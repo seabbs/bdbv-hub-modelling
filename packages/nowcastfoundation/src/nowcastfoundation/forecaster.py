@@ -1951,13 +1951,14 @@ class FoundationModel:
             sample = self.sample
             if sample is None:
                 past = (
-                    self._past_blocks(rows, places, tri, start, horizon)
-                    if self.coupling == "online" and whole
+                    self._past_blocks(rows, places, tri, start, horizon, views)
+                    if self.coupling == "online"
                     else []
                 )
                 if self.collect is not None:
                     self.collect.extend(
-                        (g, horizon) for g in [*groups, *(p[0] for p in past)]
+                        (g, horizon)
+                        for g in [*groups, *(b for p in past for b in p[0])]
                     )
                     raise _CollectedError
                 sample = partial(
@@ -1974,6 +1975,7 @@ class FoundationModel:
                         self._history(tri, start),
                         task.n_samples,
                         as_date(str(task.vintage)[:10]).toordinal(),
+                        (views, places, period is not None),
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
@@ -2158,11 +2160,13 @@ class FoundationModel:
         tri: HubTriangle,
         start: int,
         horizon: int,
-    ) -> list[tuple[Series, np.ndarray, int, int]]:
+        views: Sequence[tuple[tuple[str, ...], tuple[str, ...]]],
+    ) -> list[tuple[list[Series], np.ndarray, int, int]]:
         """Return the block at each earlier release, with what matured.
 
         Each block (at `coupling_releases`) is built as the task's is,
-        from releases up to its own. It comes with its targets' values at
+        from releases up to its own, and cut into the task's `views`.
+        It comes with its targets' values at
         the task's release, NaN where not yet final (`n_context`), its
         first target step's index in the task's steps, and its release's
         day (an ordinal date).
@@ -2196,10 +2200,17 @@ class FoundationModel:
                 continue
             seen = np.full((now.shape[0], horizon), np.nan)
             seen[:, ok] = now[:, steps[ok]]
-            block = layout_block(
-                earlier, self.layout, places, first, self._period(earlier)
-            )
-            out.append((block, seen, at, as_date(v).toordinal()))
+            blocks = [
+                layout_block(
+                    _sub(earlier, places, view),
+                    self.layout,
+                    view,
+                    first,
+                    self._period(_sub(earlier, places, view)),
+                )
+                for view, _ in views
+            ]
+            out.append((blocks, seen, at, as_date(v).toordinal()))
         return out
 
     def _values(self, tri: HubTriangle) -> np.ndarray:
@@ -2222,20 +2233,22 @@ class FoundationModel:
 
     def _coupling_fit(
         self,
-        past: Sequence[tuple[Series, np.ndarray, int, int]],
+        past: Sequence[tuple[Sequence[Series], np.ndarray, int, int]],
         horizon: int,
         seed: int,
         history: np.ndarray,
         n_samples: int,
         day: int,
+        views: BlockViews,
     ) -> dict[str, Any]:
         """Return the coupling's fit for one task, and keep its record.
 
         For `online`, `choose_coupling` picks and fits the coupling from
-        Chronos-2's quantiles of the earlier blocks (`past`), what matured
-        of them, and the target rows' `history`, with draws seeded from the
-        task's own seed. The record, without the Schaake windows, is kept
-        as `copula_fit`.
+        Chronos-2's quantiles of the earlier blocks (`past`), each put
+        back together from its `views` as the task's draws are (`_owned`),
+        what matured of them, and the target rows' `history`, with draws
+        seeded from the task's own seed. The record, without the Schaake
+        windows, is kept as `copula_fit`.
         """
         if self.coupling != "online":
             fit = fit_coupling(np.empty((0, 0, 0)), self.coupling)
@@ -2243,11 +2256,18 @@ class FoundationModel:
             return fit
         pipeline = _chronos(self.checkpoint)
         levels = np.asarray(pipeline.quantiles, dtype=float)
-        native = _native(pipeline, [p[0] for p in past], horizon, self.known)
+        flat = [b for p in past for b in p[0]]
+        native = _native(pipeline, flat, horizon, self.known)
         rows = history.shape[0]
+        n_views = len(views[0])
         quantiles = np.zeros((len(past), rows, horizon, len(levels)))
-        for k, q in enumerate(native):
-            quantiles[k] = q[:rows]
+        for k in range(len(past)):
+            # [Q, rows, horizon] per view, put together as one block.
+            parts = [
+                np.moveaxis(q, -1, 0)
+                for q in native[k * n_views : (k + 1) * n_views]
+            ]
+            quantiles[k] = np.moveaxis(_owned(parts, *views), 0, -1)
         observed = np.full((len(past), rows, horizon), np.nan)
         for k, (_, seen, _, _) in enumerate(past):
             observed[k] = seen

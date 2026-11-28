@@ -145,7 +145,7 @@ def test_development_rows_pass(tmp_path: Path) -> None:
 
 def test_a_bundle_unpacks_to_its_files_and_overlay(tmp_path: Path) -> None:
     files = {
-        "progress/runa/loss.csv": _write(
+        "progress/finetuned/loss.csv": _write(
             tmp_path / "h" / "v.csv", pd.DataFrame({"v": [1]})
         ),
         "comparison.csv": _write(
@@ -155,9 +155,11 @@ def test_a_bundle_unpacks_to_its_files_and_overlay(tmp_path: Path) -> None:
     bundle = stored.bundle("finetune", files, tmp_path / "out")
     with tarfile.open(bundle) as tar:
         names = set(tar.getnames())
-    assert {"manifest.json", "progress/runa/loss.csv", "comparison.csv"} <= (
-        names
-    )
+    assert {
+        "manifest.json",
+        "progress/finetuned/loss.csv",
+        "comparison.csv",
+    } <= (names)
     folder = stored.unpack(bundle, tmp_path / "stored" / "finetune")
     overlay = stored.overlay({"finetune": folder})
     assert overlay["stored"]["progress"] == str(folder / "progress")

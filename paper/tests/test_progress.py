@@ -68,7 +68,9 @@ def _titles(fig) -> list[str]:
 
 
 def test_the_figure_has_each_standard_panel() -> None:
-    fig = progress_figure(_loss(), _horizons(), _seven_day(), None, run="runa")
+    fig = progress_figure(
+        _loss(), _horizons(), _seven_day(), None, run="finetuned"
+    )
     titles = _titles(fig)
     assert titles[:3] == ["Loss", "7-day check", "BDBV check, relative CRPS"]
     # One German row per part of the horizons, as the checkpoint curve.
@@ -87,7 +89,7 @@ def test_a_run_on_real_data_alone_is_drawn_by_its_share_of_training() -> None:
         {"n100": "n500", "n200": "n1000"}
     )
     rows["outbreaks"] = 0
-    fig = progress_figure(_loss(), rows, _seven_day(), None, run="realonly")
+    fig = progress_figure(_loss(), rows, _seven_day(), None, run="realdata")
     german = [
         ax for ax in fig.get_axes() if ax.get_title().startswith("germany")
     ]
@@ -142,13 +144,13 @@ def test_the_cli_writes_the_figure(tmp_path: Path) -> None:
     }
     for name, frame in files.items():
         frame.to_csv(tmp_path / f"{name}.csv", index=False)
-    out = tmp_path / "si" / "progress-runa.png"
+    out = tmp_path / "si" / "progress-finetuned.png"
     main(
         [
             "progress",
             *(a for n in files for a in (f"--{n}", str(tmp_path / f"{n}.csv"))),
             "--title",
-            "runa",
+            "finetuned",
             "--out",
             str(out),
         ]

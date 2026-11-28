@@ -35,7 +35,7 @@ def test_a_run_checkpoint_is_scored_from_its_own_segment(tmp_path):
     _checkpoint(tmp_path, 250)
     blocks = _blocks(tmp_path)
     unit = next(b for b in blocks if b.startswith("rule score_run_germany:"))
-    run = tmp_path / "runs" / "runa"
+    run = tmp_path / "runs" / "finetuned"
     assert f"{run}/scores/germany-days/n250.done" in unit
     assert (
         f"nowcastgermany.checkpoint germany {run}/scores n250 "
@@ -47,13 +47,13 @@ def test_the_report_reads_the_run_and_the_shared_reference(tmp_path):
     _checkpoint(tmp_path, 250)
     blocks = _blocks(tmp_path)
     report = next(b for b in blocks if b.startswith("rule german_report:"))
-    run = tmp_path / "runs" / "runa"
+    run = tmp_path / "runs" / "finetuned"
     assert f"{run}/reports/german/index.html" in report
     assert (
         f"german_report.py {run}/scores/germany-days {run}/reports/german "
         in report
     )
-    assert "'n250=runa n250'" in report
+    assert "'n250=finetuned n250'" in report
     assert (
         f"--from reference={tmp_path}/scores/germany-days/reference" in report
     )

@@ -12,7 +12,7 @@ CONFIG = {
         "learning_rate": 1e-5,
         "prefixes": [250, 500, 8400],
     },
-    "runs": {"runa": {}, "noslots": {}},
+    "runs": {"finetuned": {}, "nobiases": {}},
     "dashboard": {
         "references": [
             {
@@ -45,15 +45,15 @@ def _workflow(tmp_path):
 def test_runs_come_from_the_workflow_runs(tmp_path):
     cfg, local = _workflow(tmp_path)
     ctx = context.build(cfg, local)
-    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
-    assert ctx.runs[0].folder == tmp_path / "runs" / "runa"
-    assert next(r for r in ctx.runs if r.live).key == "runa"
+    assert [r.key for r in ctx.runs] == ["finetuned", "nobiases"]
+    assert ctx.runs[0].folder == tmp_path / "runs" / "finetuned"
+    assert next(r for r in ctx.runs if r.live).key == "finetuned"
 
 
 def test_a_run_is_picked_by_name(tmp_path):
     cfg, local = _workflow(tmp_path)
-    ctx = context.build(cfg, local, runs=["noslots"])
-    assert [r.key for r in ctx.runs] == ["noslots"]
+    ctx = context.build(cfg, local, runs=["nobiases"])
+    assert [r.key for r in ctx.runs] == ["nobiases"]
     assert ctx.runs[0].live
 
 
@@ -61,14 +61,14 @@ def test_a_run_may_show_another_beside_it_for_comparison(tmp_path):
     # An SI run's dashboard needs nothing of the main run; named after
     # it, the main run is shown beside it, the SI run still live.
     cfg, local = _workflow(tmp_path)
-    ctx = context.build(cfg, local, runs=["noslots", "runa"])
-    assert [r.key for r in ctx.runs] == ["noslots", "runa"]
+    ctx = context.build(cfg, local, runs=["nobiases", "finetuned"])
+    assert [r.key for r in ctx.runs] == ["nobiases", "finetuned"]
     assert [r.live for r in ctx.runs] == [True, False]
 
 
 def test_an_unknown_run_name_is_an_error(tmp_path):
     cfg, local = _workflow(tmp_path)
-    with pytest.raises(SystemExit, match="runa, noslots"):
+    with pytest.raises(SystemExit, match="finetuned, nobiases"):
         context.build(cfg, local, runs=["other"])
 
 
@@ -81,7 +81,7 @@ def test_no_local_file_changes_the_dashboard(tmp_path):
     path = tmp_path / "config" / "dashboard.local.yaml"
     ctx = context.build(cfg, {**local, "DASHBOARD_CONFIG": str(path)})
     assert ctx.rule == "R"
-    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
+    assert [r.key for r in ctx.runs] == ["finetuned", "nobiases"]
 
 
 def test_the_machine_gives_the_scores_and_mailbox(tmp_path):
@@ -226,14 +226,14 @@ def test_the_machine_may_point_the_dashboard_at_another_root(tmp_path):
     cfg, local = _workflow(tmp_path)
     other = tmp_path / "elsewhere"
     ctx = context.build(cfg, {**local, "DASHBOARD_ROOT": str(other)})
-    assert ctx.runs[0].folder == other / "runs" / "runa"
+    assert ctx.runs[0].folder == other / "runs" / "finetuned"
 
 
 RUN_NAMES = {
-    "noslots": {"variant": "no attention bias"},
+    "nobiases": {"variant": "no attention biases"},
+    "sameplace": {"variant": "same place only"},
+    "parentchild": {"variant": "parent and child only"},
     "nodelays": {"paper_model": "foundation_complete"},
-    "realdata": {"variant": "synthetic and German data"},
-    "runb": {"variant": "release layer"},
 }
 
 
@@ -251,21 +251,22 @@ def _trained(root, *names):
 def test_the_configured_live_run_is_the_model_whatever_trained_last(
     tmp_path,
 ):
-    # The SI's no-attention-bias run training after Run A finished is
+    # The SI's no-attention-bias run training after the fine-tuned
+    # model's run finished is
     # still the variant: the paper's live run (`live_run`) is the model.
     cfg = {
         **CONFIG,
-        "live_run": "runa",
+        "live_run": "finetuned",
         "dashboard": {**CONFIG["dashboard"], "run_names": RUN_NAMES},
     }
-    _trained(tmp_path, "runa", "noslots")
+    _trained(tmp_path, "finetuned", "nobiases")
     local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
     ctx = context.build(cfg, local)
     # Newest first; the status follows the run training now.
-    assert [r.key for r in ctx.runs] == ["noslots", "runa"]
+    assert [r.key for r in ctx.runs] == ["nobiases", "finetuned"]
     assert ctx.runs[0].live
     assert [r.label for r in ctx.runs] == [
-        "Fine-tuned (reporting triangle), no attention bias",
+        "Fine-tuned (reporting triangle), no attention biases",
         "Fine-tuned (reporting triangle)",
     ]
     from flowlib.dashboard import paperstyle
@@ -279,20 +280,26 @@ def test_comparison_runs_are_named_from_the_dashboard_config():
 
     got = context.named_runs(
         [
-            runs.make_run(k, None, live=k == "runb")
-            for k in ("runb", "realdata", "nodelays", "noslots", "runa")
+            runs.make_run(k, None, live=k == "sameplace")
+            for k in (
+                "sameplace",
+                "parentchild",
+                "nodelays",
+                "nobiases",
+                "finetuned",
+            )
         ],
-        main="runa",
+        main="finetuned",
         names=RUN_NAMES,
     )
     assert {r.key: r.label for r in got} == {
-        "runa": "Fine-tuned (reporting triangle)",
-        "noslots": "Fine-tuned (reporting triangle), no attention bias",
+        "finetuned": "Fine-tuned (reporting triangle)",
+        "nobiases": "Fine-tuned (reporting triangle), no attention biases",
         "nodelays": "Fine-tuned (complete data)",
-        "realdata": (
-            "Fine-tuned (reporting triangle), synthetic and German data"
+        "sameplace": "Fine-tuned (reporting triangle), same place only",
+        "parentchild": (
+            "Fine-tuned (reporting triangle), parent and child only"
         ),
-        "runb": "Fine-tuned (reporting triangle), release layer",
     }
 
 
@@ -300,11 +307,13 @@ def test_a_run_shown_alone_keeps_its_variant_name():
     from flowlib.dashboard import runs
 
     got = context.named_runs(
-        [runs.make_run("noslots", None, live=True)],
-        main="runa",
+        [runs.make_run("nobiases", None, live=True)],
+        main="finetuned",
         names=RUN_NAMES,
     )
-    assert got[0].label == "Fine-tuned (reporting triangle), no attention bias"
+    assert (
+        got[0].label == "Fine-tuned (reporting triangle), no attention biases"
+    )
 
 
 def test_the_workflow_config_names_every_run():
@@ -331,5 +340,5 @@ def test_the_dashboard_script_reads_the_paper_s_live_run():
     import dashboard
 
     config = dashboard.read_config(dashboard.CONFIG)
-    assert config["live_run"] == "runa"
+    assert config["live_run"] == "finetuned"
     assert "dashboard" in config

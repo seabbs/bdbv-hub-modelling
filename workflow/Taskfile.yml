@@ -136,12 +136,12 @@ tasks:
         vars: {WF_TARGET: finetune}
 
 
-  finetune-realonly:
+  finetune-realdata:
     dir: ..
-    desc: Fine-tune Chronos-2 on real data alone (the realonly run, foundation_real) on the GPU, score its checkpoints and release the final one as realdata-ft-<hash> (writes a GitHub release)
+    desc: Fine-tune Chronos-2 on real data alone (the realdata run, foundation_real) on the GPU, score its checkpoints and release the final one as realdata-ft-<hash> (writes a GitHub release)
     cmds:
       - task: wf
-        vars: {WF_TARGET: finetune_realonly}
+        vars: {WF_TARGET: finetune_realdata}
 
 
   publish:

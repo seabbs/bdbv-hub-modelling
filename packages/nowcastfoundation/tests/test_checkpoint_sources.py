@@ -235,7 +235,11 @@ def test_the_label_resolves_latest_from_the_main_release_alone(
     # The checkpoint the main release names; no checksum file is read
     # for the name.
     monkeypatch.delenv(fc.FINETUNED_ENV, raising=False)
-    record = {"run": "runa", "spec": "slots-new", "tag": "chronos-slots-new"}
+    record = {
+        "run": "finetuned",
+        "spec": "slots-new",
+        "tag": "chronos-slots-new",
+    }
     monkeypatch.setattr(fc, "main_release", lambda: record)
     conf = _config(tmp_path, 'source = "github"\nhash = "latest"\n')
     assert fc.latest_spec() == "slots-new"

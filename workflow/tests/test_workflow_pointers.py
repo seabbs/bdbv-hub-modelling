@@ -24,9 +24,9 @@ def _edges(tmp_path, target, config=None):
 
 def test_publish_promotes_the_main_run_s_checkpoint(tmp_path):
     _checkpoint(tmp_path, 250)
-    jobs = dry(tmp_path, "publish", config={**FT, "live_run": "runa"})
+    jobs = dry(tmp_path, "publish", config={**FT, "live_run": "finetuned"})
     assert jobs["promote_main"] == 1
-    _, edges = _edges(tmp_path, "publish", {**FT, "live_run": "runa"})
+    _, edges = _edges(tmp_path, "publish", {**FT, "live_run": "finetuned"})
     assert ("publish_checkpoint", "promote_main") in edges
 
 
