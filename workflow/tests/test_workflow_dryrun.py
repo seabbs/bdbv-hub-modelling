@@ -1476,7 +1476,7 @@ def test_the_comparisons_ask_only_for_the_paper_s_runs(tmp_path, table, report):
     # the workflow config names.
     # The overlay merges into the paper config's comparisons, so each names
     # the same run here.
-    names = ("nobiases", "sameplace", "parentchild", "nolags")
+    names = ("nobiases", "sameplace", "parentchild", "nodelays")
     pairs = dict.fromkeys(names, "nobiases")
     config = {**FT, "live_run": "finetuned", "comparisons": pairs}
     out = dry_run(
@@ -1485,7 +1485,7 @@ def test_the_comparisons_ask_only_for_the_paper_s_runs(tmp_path, table, report):
     assert out.returncode == 0, out.stderr + out.stdout
     for run in ("finetuned", "nobiases"):
         assert f"{tmp_path}/runs/{run}/reports/{report}" in out.stdout
-    for run in ("nolags", "sameplace", "parentchild"):
+    for run in ("nodelays", "sameplace", "parentchild"):
         assert f"{tmp_path}/runs/{run}/reports/{report}" not in out.stdout
 
 

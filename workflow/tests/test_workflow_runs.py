@@ -25,7 +25,7 @@ def test_the_committed_runs_are_the_fine_tuned_model_and_its_ablations():
         "nobiases",
         "sameplace",
         "parentchild",
-        "nolags",
+        "nodelays",
         "realdata",
     ]
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
@@ -169,12 +169,12 @@ def test_the_release_layer_is_passed_only_when_a_run_names_one():
 def test_the_no_lags_run_is_the_recipe_on_complete_counts():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
-    a, b = found["finetuned"].ft, found["nolags"].ft
+    a, b = found["finetuned"].ft, found["nodelays"].ft
     assert (a["layout"], b["layout"]) == ("ragged", "complete")
     assert {k: v for k, v in a.items() if k != "layout"} == {
         k: v for k, v in b.items() if k != "layout"
     }
-    assert "--layout complete" in runs.trainer_options(found["nolags"])
+    assert "--layout complete" in runs.trainer_options(found["nodelays"])
     assert "--layout" not in runs.trainer_options(found["finetuned"])
 
 

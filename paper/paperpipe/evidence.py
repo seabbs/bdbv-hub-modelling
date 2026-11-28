@@ -130,9 +130,9 @@ COMPARISONS: Final = {
         "the fine-tuned and no attention bias runs' scores by checkpoint",
         ("Fine-tuned", "No attention biases"),
     ),
-    "nolags": (
-        "the fine-tuned and no lag series runs' scores by checkpoint",
-        ("Fine-tuned", "No lag series"),
+    "nodelays": (
+        "the fine-tuned and no delay information runs' scores by checkpoint",
+        ("Fine-tuned", "No delay information"),
     ),
     # The workflow's `realdata` run: real data alone (`foundation_real`).
     "realdata": (
@@ -931,7 +931,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("nobiases", "nolags", "realdata", "daily"):
+    for name in ("nobiases", "nodelays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

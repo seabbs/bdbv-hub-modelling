@@ -165,8 +165,8 @@ runs:
   # bias alone, and the parent and child biases alone.
   sameplace: {bias_pairs: [same]}
   parentchild: {bias_pairs: [up, down]}
-  # The recipe on complete counts, without lag series.
-  nolags: {layout: complete}
+  # The recipe on complete counts, without delay information.
+  nodelays: {layout: complete}
   # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
   # "Fine-tuning on real data"): the recipe, layout and attention biases
   # on the German development half and the BDBV releases. It trains in
@@ -190,7 +190,7 @@ runs:
 # The runs `finetune` trains, scores and reports on (null: every run in
 # `runs`), each on a GPU of its own when there are enough, else in this
 # order. A run's saved segments are not trained again.
-train_runs: [finetuned, nobiases, sameplace, parentchild, nolags]
+train_runs: [finetuned, nobiases, sameplace, parentchild, nodelays]
 
 # The device and CPU threads of every forecasting job: checkpoint scoring
 # (the German units), held-out evaluation, backtests (German, Ebola), hub
@@ -277,7 +277,7 @@ dashboard:
     nobiases: {variant: no attention biases}
     sameplace: {variant: same place only}
     parentchild: {variant: parent and child only}
-    nolags: {paper_model: foundation_complete}
+    nodelays: {paper_model: foundation_complete}
     realdata: {paper_model: foundation_real}
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]

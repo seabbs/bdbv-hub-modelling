@@ -45,7 +45,7 @@ comparisons:
   nobiases: nobiases
   sameplace: sameplace
   parentchild: parentchild
-  nolags: nolags
+  nodelays: nodelays
   realdata: realdata
 # Samples per forecast for the studies scored on samples.
 n_samples: 100

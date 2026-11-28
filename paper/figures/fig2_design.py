@@ -190,7 +190,7 @@ ABLATIONS = (
     ("No attention biases", "", (True, ())),
     ("Same place", "attention bias only", (True, ("same",))),
     ("Parent and child", "attention biases only", (True, ("parent",))),
-    ("No lag series", "", (False, ALL_BIASES)),
+    ("No delay information", "", (False, ALL_BIASES)),
 )
 
 
@@ -303,7 +303,7 @@ ZS, FT, AB, RD, RW, RN = range(6)
 MODELS = (
     ("Zero-shot", [], None, 16.0),
     ("Fine-tuned", ["all attention biases"], (True, ALL_BIASES), 26.0),
-    ("Ablations", ["of attention biases", "and lag series"], None, 26.0),
+    ("Ablations", ["of attention biases", "and delay information"], None, 26.0),
     (
         "Real data",
         ["Germany to 9 Feb 2022", "Ebola hub to 8 Nov 2026"],
@@ -329,7 +329,7 @@ MODEL_COLOURS = (
 # Panel B: what each model is given, a name and a note.
 CC, NC, RT = range(3)
 INPUTS = (
-    ("Complete counts", ["latest counts, no lags"]),
+    ("Complete counts", ["latest counts only"]),
     ("Nowcast", ["random walk nowcast", "as complete counts"]),
     ("Reporting triangle", ["counts and lag series"]),
 )
@@ -360,7 +360,7 @@ FLOWS = (
 
 
 def flow_width(model: int, inp: int) -> float:
-    """Return a link's width: thin for the no-lags ablation."""
+    """Return a link's width: thin for the no-delays ablation."""
     return THIN if (model, inp) == (AB, CC) else 1.5
 
 

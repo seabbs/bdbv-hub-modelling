@@ -233,7 +233,7 @@ RUN_NAMES = {
     "nobiases": {"variant": "no attention biases"},
     "sameplace": {"variant": "same place only"},
     "parentchild": {"variant": "parent and child only"},
-    "nolags": {"paper_model": "foundation_complete"},
+    "nodelays": {"paper_model": "foundation_complete"},
 }
 
 
@@ -284,7 +284,7 @@ def test_comparison_runs_are_named_from_the_dashboard_config():
             for k in (
                 "sameplace",
                 "parentchild",
-                "nolags",
+                "nodelays",
                 "nobiases",
                 "finetuned",
             )
@@ -295,7 +295,7 @@ def test_comparison_runs_are_named_from_the_dashboard_config():
     assert {r.key: r.label for r in got} == {
         "finetuned": "Fine-tuned (reporting triangle)",
         "nobiases": "Fine-tuned (reporting triangle), no attention biases",
-        "nolags": "Fine-tuned (complete data)",
+        "nodelays": "Fine-tuned (complete data)",
         "sameplace": "Fine-tuned (reporting triangle), same place only",
         "parentchild": (
             "Fine-tuned (reporting triangle), parent and child only"

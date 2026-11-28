@@ -150,7 +150,7 @@ def test_each_comparison_pairs_the_live_run_with_its_variant() -> None:
     assert set(out["run"]) == set(labels)
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
     # A variant with no scored checkpoint gives no rows.
-    assert comparison_rows(_scores(), "one-model", "nolags", labels).empty
+    assert comparison_rows(_scores(), "one-model", "nodelays", labels).empty
 
 
 def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
@@ -187,7 +187,7 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     rows = tmp_path / "scores.csv"
     _scores().to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"checkpoint_scores": rows}
-    pairs = {"nobiases": "no-slots", "nolags": "nolags"}
+    pairs = {"nobiases": "no-slots", "nodelays": "nodelays"}
     numbers = write_evidence(
         paths,
         tmp_path / "si",
@@ -200,9 +200,9 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
 
     waiting = numbers["evidence"]["waiting"]
     assert COMPARISONS["nobiases"][0] not in waiting
-    assert COMPARISONS["nolags"][0] in waiting
+    assert COMPARISONS["nodelays"][0] in waiting
     assert COMPARISONS["realdata"][0] in waiting
-    assert (tmp_path / "fig" / "compare-nolags.png").is_file()
+    assert (tmp_path / "fig" / "compare-nodelays.png").is_file()
 
 
 def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:
@@ -251,7 +251,9 @@ def test_the_attention_bias_setups_are_compared_together() -> None:
     out = comparison_rows(_with_subsets(), "one-model", others, labels)
     assert set(out["run"]) == set(labels)
     # The subsets join the no-biases comparison only.
-    assert compared("nolags", PAIRS | {"nolags": "nolags"})[0] == ["nolags"]
+    assert compared("nodelays", PAIRS | {"nodelays": "nodelays"})[0] == [
+        "nodelays"
+    ]
 
 
 def test_the_bias_summary_has_a_row_per_setup_scored() -> None:

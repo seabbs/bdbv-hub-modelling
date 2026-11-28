@@ -1163,15 +1163,15 @@ Zero-shot Chronos-2 and the newest checkpoint of each attention bias setup: nati
 
 ### Delays against no delays
 
-- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.
+- We fine-tune a run on complete counts only, with the attention biases and without delay information, and compare it with the reporting-triangle run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
-- @fig-compare-nolags shows both runs by checkpoint.
-- @fig-progress-nolags gives the no-delay run's own progress.
-- Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
+- @fig-compare-nodelays shows both runs by checkpoint.
+- @fig-progress-nodelays gives the no-delay run's own progress.
+- Without delay information the no-delay model has no counts after the last complete step, so its context ends there.
 
-![Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.](build/figures/si/compare-nolags.png){#fig-compare-nolags}
+![Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.](build/figures/si/compare-nodelays.png){#fig-compare-nodelays}
 
-![Progress of the no-delay run (`nolags`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-nolags.png){#fig-progress-nolags}
+![Progress of the no-delay run (`nodelays`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-nodelays.png){#fig-progress-nodelays}
 
 ### Impact of correlated trajectories
 
