@@ -210,11 +210,12 @@ Teams without the capacity to set up specialist models could also use them direc
 - We cut up to 14 training blocks from each simulation.
 - A block is daily, 3-day or weekly.
 - A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
-- In 30% of blocks releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did.
+- In 15% of blocks releases start late.
+  Releases begin partway through the outbreak, so the first release fills in earlier reference dates, as the Ebola hub's first release did.
 - 5% of blocks have no lag series, as when only the latest data are at hand.
 - Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.
 - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
-- Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
+- Training blocks set the maximum delay by the same rule, scaled by a factor drawn from Normal(1, 0.05) in 10% of blocks, so the model can handle it set slightly differently.
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
 - We scored every checkpoint of every fine-tuned model, including those with other attention bias setups and without lag series, on the validation simulations and the German development period, and show these in the Supporting Information (*Checkpoint curve*).
 - At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
@@ -355,12 +356,12 @@ Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig
 - Zero-shot, this is how the Ebola hub teams that use foundation models use them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development period and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
-- Besides the main model, which has all three attention biases, we fine-tuned ablations with no attention biases, with only the same-place attention bias, and with only the parent and child attention biases (@fig-design A).
+- Besides the fine-tuned model, which has all three attention biases, we fine-tuned ablations with no attention biases, with only the same-place attention bias, and with only the parent and child attention biases (@fig-design A).
 - We also fine-tuned one ablation without lag series (@fig-design A).
 - For the Ebola hub only, we compared the random walk nowcast's rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
 - We scored the real-data fine-tune on the German test period, and on the Ebola rounds after its last training release.
-- We compared the other three attention bias setups and the model without lag series with the main model by validation loss and by scores on the German development period at each checkpoint.
+- We compared the other three attention bias setups and the model without lag series with the fine-tuned model by validation loss and by scores on the German development period at each checkpoint.
 - We set the copula settings on the Ebola release backtest before the Ebola study was held out (Supporting Information, *Choices tuned on development data*).
 - We scored the other comparisons as in the case study they apply to, relative to its baseline.
 :::
@@ -500,7 +501,7 @@ On the Ebola {{< meta results.ebola.scope >}}, zero-shot and fine-tuned Chronos-
 
 Fine-tuning on real data instead of simulations changed the German held-out score by [X] and the Ebola score after {{< meta results.realdata_after >}} by [X] (Supporting Information, *Real-data fine-tune against synthetic*).
 
-Against the main model, the German development score at the final checkpoint changed by [X] with no attention biases, [X] with the same-place bias only, [X] with the parent and child biases only and [X] without lag series (Supporting Information, *Attention bias setups*; *Delays against no delays*).
+Against the fine-tuned model, the German development score at the final checkpoint changed by [X] with no attention biases, [X] with the same-place bias only, [X] with the parent and child biases only and [X] without lag series (Supporting Information, *Attention bias setups*; *Delays against no delays*).
 
 On the Ebola hub, the median rolling $\rho_p$ between provinces was [X] for the random walk nowcast, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
 Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).

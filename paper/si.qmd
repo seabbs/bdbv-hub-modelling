@@ -334,10 +334,10 @@ where $N$ is the number of training simulations, {{< meta results.training.simul
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
 Releases follow the layout's steps, daily, every 3 days or weekly.
-Of the daily blocks, 25% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
+Of the daily blocks, a third have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
 Of the 3-day and weekly blocks, 20% have missed releases.
 In those blocks each release but the last is missed with chance 0.2.
-In 30% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
+In 15% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
 The releases before the start are dropped, so the first kept release fills in the earlier onsets, as the Ebola hub's first release held onsets from months before.
 Lag series start at that release, and the counts keep the whole history.
 In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
@@ -427,7 +427,7 @@ At each checkpoint we also check the 7-day forecasts on up to 100 held-out block
 We compare the median of the 7-day row with the 7-day sums of the same block's daily medians, and give the share of those sums inside the row's 90% interval.
 We compare the roughness of the 7-day median, the mean absolute second difference of its log, with the truth's, so a ratio of 1 is as smooth as the truth.
 The dashboard shows these in its checkpoint tables.
-Reviewing it led to the complete-only reference in the German panels of each run's progress figure (@fig-progress-runa).
+Reviewing it led to the complete-only reference in the German panels of each run's progress figure (@fig-progress-finetuned).
 The dashboard was built with the help of a large language model.
 
 ![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and validation loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
@@ -1074,7 +1074,7 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 
 - We compare the final run's checkpoints, fine-tuned on {{< meta results.training.checkpoints >}} simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-progress-runa gives its progress over the checkpoints, in the panels every run's progress figure has.
+- @fig-progress-finetuned gives its progress over the checkpoints, in the panels every run's progress figure has.
 - Its loss panel gives the trainer's training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.
 - Its German panels give development-period relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
 - Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.
@@ -1082,7 +1082,7 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
 
-![Progress of the final run (`runa`) over its checkpoints. Loss: the trainer's training loss (a rolling mean of 50 logged steps), the validation loss by source at each evaluated step and by level (markers) at the start and at each checkpoint, against training step, with each checkpoint's simulations marked. 7-day check: the 7-day row's median over the 7-day sums of the daily medians, the share of those sums inside the row's 90% interval, and the roughness of its median over the truth's, each with its target dashed. BDBV check: relative CRPS against `randomwalknowcast` on the hub's releases, in a paper run only. German rows: WIS (on each model's own quantiles) relative to `randomwalknowcast` by level, on every horizon, the nowcasts (days 0 and before) and the forecasts (days after), with zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data (dotted) and `randomwalknowcast` at 1. Each German panel gives n, the fewest matched cells of its points, and the forecast origins they come from. Panels without rows say so. {{< meta evidence.live.label >}} Development data only.](build/figures/si/progress-runa.png){#fig-progress-runa}
+![Progress of the fine-tuned model's run (`finetuned`) over its checkpoints. Loss: the trainer's training loss (a rolling mean of 50 logged steps), the validation loss by source at each evaluated step and by level (markers) at the start and at each checkpoint, against training step, with each checkpoint's simulations marked. 7-day check: the 7-day row's median over the 7-day sums of the daily medians, the share of those sums inside the row's 90% interval, and the roughness of its median over the truth's, each with its target dashed. BDBV check: relative CRPS against `randomwalknowcast` on the hub's releases, in a paper run only. German rows: WIS (on each model's own quantiles) relative to `randomwalknowcast` by level, on every horizon, the nowcasts (days 0 and before) and the forecasts (days after), with zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data (dotted) and `randomwalknowcast` at 1. Each German panel gives n, the fewest matched cells of its points, and the forecast origins they come from. Panels without rows say so. {{< meta evidence.live.label >}} Development data only.](build/figures/si/progress-finetuned.png){#fig-progress-finetuned}
 
 ::: {#tbl-live-summary}
 {{< include build/tables/si/live-summary.md >}}
@@ -1122,12 +1122,12 @@ German nowcast hub, daily counts: the score panels of the German results figure,
 - It saw the German development period, so we score it on the test period only.
 - Both use the same recipe and the reporting-triangle layout.
 - @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
-- @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-runa.
+- @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-finetuned.
 - We leave the real-data model out of every other table and figure.
 
 ![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
 
-![Progress of the real-data run (`realdata`) over its checkpoints, in the panels of @fig-progress-runa. Its German development scores are on data it trained on. Development data only.](build/figures/si/progress-realdata.png){#fig-progress-realdata}
+![Progress of the real-data run (`realdata`) over its checkpoints, in the panels of @fig-progress-finetuned. Its German development scores are on data it trained on. Development data only.](build/figures/si/progress-realdata.png){#fig-progress-realdata}
 
 ::: {#tbl-real-finetune}
 {{< include build/tables/si/real-finetune.md >}}
@@ -1137,23 +1137,23 @@ Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundat
 
 ### Attention bias setups
 
-- We compare four attention bias setups: all three biases (the main model), no biases, the same-place bias only, and the parent and child biases only.
+- We compare four attention bias setups: all three biases (the fine-tuned model), no biases, the same-place bias only, and the parent and child biases only.
 - All four runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's validation loss and German development-period relative scores of each run by checkpoint and level.
-- @fig-progress-noslots, @fig-progress-sameonly and @fig-progress-parentonly give each other run's own progress, as @fig-progress-runa does for the main model.
+- @fig-compare-nobiases shows the trainer's validation loss and German development-period relative scores of each run by checkpoint and level.
+- @fig-progress-nobiases, @fig-progress-sameplace and @fig-progress-parentchild give each other run's own progress, as @fig-progress-finetuned does for the fine-tuned model.
 - @tbl-slots-summary gives each run's scores at its final checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - The lag-swap test is not yet scored for this run.
 
-![Progress of the run without attention biases (`noslots`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-noslots.png){#fig-progress-noslots}
+![Progress of the run without attention biases (`nobiases`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-nobiases.png){#fig-progress-nobiases}
 
-![Progress of the run with the same-place bias only (`sameonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-sameonly.png){#fig-progress-sameonly}
+![Progress of the run with the same-place bias only (`sameplace`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-sameplace.png){#fig-progress-sameplace}
 
-![Progress of the run with the parent and child biases only (`parentonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-parentonly.png){#fig-progress-parentonly}
+![Progress of the run with the parent and child biases only (`parentchild`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-parentchild.png){#fig-progress-parentchild}
 
-![Attention bias setups: the trainer's validation loss and German development-period relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention bias setups: the trainer's validation loss and German development-period relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-nobiases.png){#fig-compare-nobiases}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
@@ -1165,13 +1165,13 @@ Zero-shot Chronos-2 and the newest checkpoint of each attention bias setup: nati
 
 - We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
-- @fig-compare-delays shows both runs by checkpoint.
-- @fig-progress-nodelays gives the no-delay run's own progress.
+- @fig-compare-nolags shows both runs by checkpoint.
+- @fig-progress-nolags gives the no-delay run's own progress.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
 
-![Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+![Delays against no delays: validation loss by source and German development-period relative scores, by checkpoint.](build/figures/si/compare-nolags.png){#fig-compare-nolags}
 
-![Progress of the no-delay run (`nodelays`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-nodelays.png){#fig-progress-nodelays}
+![Progress of the no-delay run (`nolags`) over its checkpoints, in the panels of @fig-progress-finetuned. Development data only.](build/figures/si/progress-nolags.png){#fig-progress-nolags}
 
 ### Impact of correlated trajectories
 
