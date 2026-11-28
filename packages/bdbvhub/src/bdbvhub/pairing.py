@@ -22,7 +22,12 @@ from nowcastbaselines.randomwalk import RandomWalk
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcasteval.backtest import load_config, real_vintages
 from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
-from nowcasteval.pairing import CANDIDATE_COLUMNS, SCORE_COLUMNS, variant_scores
+from nowcasteval.pairing import (
+    CANDIDATE_COLUMNS,
+    RHO_COLUMNS,
+    SCORE_COLUMNS,
+    variant_scores,
+)
 from nowcastutils.base import ModelUnavailableError, add_national, get_model
 
 __all__ = ["bdbv_candidates", "bdbv_sensitivity"]
@@ -32,8 +37,8 @@ def bdbv_sensitivity(
     data: str,
     config_path: str = "packages/nowcastbdbv/config/backtest.toml",
     origins: list[str] | None = None,
-) -> pd.DataFrame:
-    """Score both pairings on the BDBV release backtest's origins.
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    r"""Score both pairings on the BDBV release backtest's origins.
 
     Each origin but the latest (`origin_tasks`) is forecast for
     the provinces, with the country their sum. Zones are their own
@@ -54,6 +59,9 @@ def bdbv_sensitivity(
     -------
     pandas.DataFrame
         `variant_scores` rows of every model, variant, origin and level.
+    pandas.DataFrame
+        The rolling $\rho_p$ of each model and origin (`RHO_COLUMNS`):
+        its copula record, with `level` `provinces`, the places it pairs.
     """
     config = load_config(config_path)
     target, delays = load_target(data), load_delays(data)
@@ -62,14 +70,16 @@ def bdbv_sensitivity(
     vintages = real_vintages(real)
     truth = rolling_truth(real, resolve_truth_delay(config, target))
     tasks = origin_tasks(target, delays, config, daily)
-    frames = []
+    frames, fits = [], []
     for origin in vintages[:-1]:
         if origin not in tasks:
             continue
         if origins is not None and origin not in origins:
             continue
         for name in MODELS:
-            drawn, _ = variant_forecasts(name, tasks[origin])
+            drawn, fit = variant_forecasts(name, tasks[origin])
+            if fit is not None:
+                fits.append({**fit, "origin": origin, "level": "provinces"})
             for label, s in drawn.items():
                 frames.append(
                     variant_scores(
@@ -81,9 +91,10 @@ def bdbv_sensitivity(
                         origin=origin,
                     )
                 )
+    rho = pd.DataFrame(fits, columns=list(RHO_COLUMNS))
     if not frames:
-        return pd.DataFrame(columns=list(SCORE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)
+        return pd.DataFrame(columns=list(SCORE_COLUMNS)), rho
+    return pd.concat(frames, ignore_index=True), rho
 
 
 def bdbv_candidates(

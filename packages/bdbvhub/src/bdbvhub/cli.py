@@ -1888,12 +1888,16 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
 
         scores = pairing.bdbv_candidates(CANDIDATES, data, config, origins)
         print(best_candidate(scores).to_string(index=False))
+        rho = None
     else:
-        scores = pairing.bdbv_sensitivity(data, config, origins)
+        scores, rho = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"
     write_csv(scores, path)
+    if rho is not None:
+        # Each origin's rolling rho_p, as the German study writes it.
+        write_csv(rho, out / f"{name}-rho.csv.gz")
     print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
     return 0
 
