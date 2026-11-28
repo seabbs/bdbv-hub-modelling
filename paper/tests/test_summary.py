@@ -177,3 +177,95 @@ def test_summary_gives_the_training_checkpoints_from_the_config(
         "penultimate": "3,200",
         "penultimate_rate": "33%",
     }
+
+
+def test_summary_quotes_each_model_against_the_study_s_baseline() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": ["KIT-frozen_baseline", "randomwalknowcast", "foundation"],
+            "rel_score": [1.0, 1.2, 0.9],
+            "rel_log_score": [1.0, 1.1, 0.95],
+            "rel_score_randomwalknowcast": [0.83, 1.0, 0.75],
+        }
+    )
+    out = study_summary({"study": "germany", "source": "real"}, scores)
+    assert out["vs_baseline"]["foundation"] == 0.9
+    assert out["vs_baseline"]["randomwalknowcast"] == 1.2
+    assert out["vs_baseline"]["foundation_zeroshot"] == "pending"
+
+
+def test_summary_ranks_models_by_pairwise_skill() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": [
+                "BDBVHub-baseline",
+                "foundation",
+                "seabbs-renewal",
+                "randomwalknowcast",
+                "no-pairwise",
+            ],
+            "rel_score": [1.0, 0.7, 0.9, 1.1, 0.5],
+            "rel_log_score": [1.0, 0.8, 0.9, 1.0, 0.5],
+            "pair_score": [1.0, 0.6, 0.95, 0.8, float("nan")],
+        }
+    )
+    out = study_summary({"study": "ebola", "source": "real"}, scores)
+    assert out["rank"] == {
+        "n": 4,
+        "foundation": 1,
+        "randomwalknowcast": 2,
+        "seabbs_renewal": 3,
+    }
+
+
+def test_a_study_a_run_leaves_out_is_pending_and_hidden(tmp_path) -> None:
+    path = tmp_path / "r.yml"
+    write_summary(path, "development", {"germany": {"n": 1}})
+    doc = yaml.safe_load(path.read_text())["results"]
+    assert doc["germany"] == {"n": 1}
+    ebola = doc["ebola"]
+    assert ebola["shown"] is False
+    assert ebola["rank"]["foundation"] == "pending"
+    assert ebola["vs_baseline"]["randomwalknowcast"] == "pending"
+
+
+def _paths(text: str, root: str) -> set[tuple[str, ...]]:
+    import re
+
+    return {
+        tuple(m.split("."))
+        for m in re.findall(rf"meta {root}\.([\w.]+) >", text)
+    }
+
+
+def _resolve(doc: dict, path: tuple[str, ...]) -> bool:
+    node = doc
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return False
+        node = node[key]
+    return True
+
+
+def test_every_results_key_the_paper_quotes_is_written(tmp_path) -> None:
+    from pathlib import Path
+
+    here = Path(__file__).parents[1]
+    text = "".join((here / n).read_text() for n in ("main.qmd", "si.qmd"))
+    scores = pd.DataFrame(
+        {
+            "model": ["randomwalknowcast", "foundation"],
+            "rel_score": [1.0, 0.8],
+            "rel_log_score": [1.0, 0.9],
+            "pair_score": [1.0, 0.8],
+        }
+    )
+    studies = {
+        s: study_summary({"study": s, "source": "dummy"}, scores, "paper")
+        for s in ("synthetic", "germany")
+    }
+    path = tmp_path / "r.yml"
+    write_summary(path, "development", studies, prefixes=[100, 200])
+    doc = yaml.safe_load(path.read_text())["results"]
+    missing = [p for p in _paths(text, "results") if not _resolve(doc, p)]
+    assert not missing, missing

@@ -704,3 +704,63 @@ def test_the_coupling_change_is_quoted_and_tabled(tmp_path) -> None:
     table = (tmp_path / "si" / "coupling.md").read_text()
     assert "Independent" in table
     assert "Comonotone" in table
+
+
+def _ablations() -> pd.DataFrame:
+    """German national checkpoint rows of the live run and its variants."""
+    from paperpipe.evidence import CHECKPOINT_RULE
+
+    rows = []
+    for run, rel in (
+        ("finetuned", {1000: 0.9, 2000: 0.8}),
+        ("nobiases", {1000: 1.0, 2000: 0.88}),
+        ("nodelays", {1000: 1.08}),
+    ):
+        for n, value in rel.items():
+            rows.append(
+                {
+                    "study": "germany",
+                    "level": "national",
+                    "model": "foundation_zeroshot",
+                    "run": run,
+                    "checkpoint": f"n{n}",
+                    "outbreaks": n,
+                    "rule": CHECKPOINT_RULE,
+                    "rel_wis": value,
+                    "n": 9,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_each_ablation_s_change_is_at_its_last_shared_checkpoint() -> None:
+    from paperpipe.evidence import ablation_numbers
+
+    pairs = {"nobiases": "nobiases", "nodelays": "nodelays"}
+    out = ablation_numbers(_ablations(), "finetuned", pairs)
+    assert out["nobiases"] == "+10.0%"
+    assert out["nobiases_simulations"] == "2,000"
+    # The no-delay run has only its first checkpoint scored yet.
+    assert out["nodelays"] == "+20.0%"
+    assert out["nodelays_simulations"] == "1,000"
+    assert out["sameplace"] == "(not yet available)"
+
+
+def test_every_evidence_key_the_paper_quotes_is_written(tmp_path) -> None:
+    text = "".join(
+        (Path(__file__).parents[1] / n).read_text()
+        for n in ("main.qmd", "si.qmd")
+    )
+    out = write_evidence(
+        {}, tmp_path / "si", tmp_path / "f", tmp_path / "e.yml"
+    )
+    doc = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]
+    assert out["evidence"] == doc
+    missing = []
+    for path in re.findall(r"meta evidence\.([\w.]+) >", text):
+        node = doc
+        for key in path.split("."):
+            node = node.get(key) if isinstance(node, dict) else None
+        if node is None:
+            missing.append(path)
+    assert not missing, missing
