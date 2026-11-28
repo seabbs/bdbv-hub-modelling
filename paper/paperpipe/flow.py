@@ -262,28 +262,16 @@ class PaperFlow:
         return self.config.get("rounds_dir")
 
     def workflow_evidence(self) -> dict[str, str]:
-        """Return the evidence step's inputs from workflow rules.
+        """Return the evidence step's development inputs from workflow rules.
 
         The published-range table's rows (rule sim_diseases) and the realism
-        step's outputs (rule sim_realism), and the walk models' pairing
-        scores and rho_p (rules si_copula and pairing_germany). Each is
+        step's outputs (rule sim_realism), or their stored copies. Each is
         left out, and its SI result pending, while the rounds folder is
-        null, for the pairing scores while the German benchmark runs on
-        dummy data, and for the walks' scores while the development
-        simulations are null.
+        null and nothing is stored.
         """
         files = {}
         evidence = f"{self.results}/evidence"
         stored = self.stored
-        if self.germany["real"]:
-            if self.pairing_synthetic_file() and self.pairing_germany_file():
-                files["si_copula"] = f"{evidence}/si-copula.csv"
-            if self.host_outputs:
-                files["copula_rho"] = (
-                    f"{evidence}/pairing/pairing-germany-rho.csv.gz"
-                )
-            elif stored.get("copula_rho"):
-                files["copula_rho"] = stored["copula_rho"]
         if where := self.rounds_dir:
             files["sim_diseases"] = f"{where}/report/sim-diseases.csv"
             files["sim_summaries"] = f"{evidence}/sim-summaries.csv"
@@ -293,6 +281,27 @@ class PaperFlow:
                 if stored.get(name):
                     files[name] = stored[name]
         return files
+
+    def ebola_files(self) -> dict[str, str]:
+        """Return the paper run's Ebola analyses, by evidence name.
+
+        The walks' pairing scores, summarised, and their rolling rho_p on
+        the Ebola release backtest (rule pairing_ebola).
+        """
+        evidence = f"{self.results}/paper/evidence"
+        return {
+            "si_copula": f"{evidence}/si-copula.csv",
+            "copula_rho": f"{evidence}/pairing/pairing-bdbv-rho.csv.gz",
+        }
+
+    def ebola_evidence(self, mode: str) -> dict[str, str]:
+        """Return the evidence step's Ebola inputs, a paper run's only.
+
+        A development run holds the Ebola study out, so it has none.
+        """
+        if mode != "paper" or "ebola" not in self.studies(mode):
+            return {}
+        return self.ebola_files()
 
     @property
     def stored(self) -> Mapping[str, str]:
@@ -307,27 +316,10 @@ class PaperFlow:
     def host_outputs(self) -> bool:
         """Whether this run makes the hosts' outputs (`host_outputs`).
 
-        Pages sets it false: the German pairing sensitivity is read from
-        the stored copy, never run.
+        Pages sets it false: the German development table is read from
+        the stored copy, never made.
         """
         return bool(self.config.get("host_outputs", True))
-
-    def pairing_germany_file(self) -> str | None:
-        """Return the German pairing scores: made, stored or none."""
-        if self.host_outputs:
-            return f"{self.results}/evidence/pairing/pairing-germany.csv.gz"
-        return self.stored.get("pairing_germany")
-
-    def pairing_synthetic_file(self) -> str | None:
-        """Return the synthetic pairing scores: made, stored or none.
-
-        Rule pairing_synthetic makes them from the development
-        simulations; without those, the stored file stands in, and with
-        neither the copula figure waits on them.
-        """
-        if self.synthetic["simulations"].get("development"):
-            return f"{self.results}/evidence/pairing/pairing-synthetic.csv.gz"
-        return self.stored.get("pairing_synthetic")
 
     def realism_inputs(self) -> dict[str, Any]:
         """Return the realism step's inputs.

@@ -92,9 +92,7 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
         "sim_q95": "(not yet available)",
         "Germany_states": "(not yet available)",
     }
-    from paperpipe.evidence import COMPARISONS
-
-    from paperpipe.evidence import EBOLA_EVIDENCE
+    from paperpipe.evidence import COMPARISONS, EBOLA_EVIDENCE
 
     waiting = out["evidence"]["waiting"]
     assert len(waiting) == (

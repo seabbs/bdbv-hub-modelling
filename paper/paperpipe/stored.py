@@ -64,12 +64,9 @@ REPO = "seabbs/bdbv-hub-modelling"
 
 # Each stored file and the config entry it stands in for.
 STORED = {
-    "pairing-synthetic.csv.gz": ("stored", "pairing_synthetic"),
     "sim-diseases.csv": ("stored", "sim_diseases"),
     "sim-summaries.csv": ("stored", "sim_summaries"),
     "sim-realism.csv": ("stored", "sim_realism"),
-    "pairing-germany.csv.gz": ("stored", "pairing_germany"),
-    "pairing-germany-rho.csv.gz": ("stored", "copula_rho"),
     "germany-forecasts.csv.gz": ("stored", "germany_forecasts"),
     "comparison.csv": ("evidence", "checkpoint_scores"),
     "compare-daily.csv": ("evidence", "compare_daily"),
@@ -140,9 +137,6 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             "synthetic-dev.csv.gz": (
                 synthetic["forecasts"]["development"] if dev_sims else None
             ),
-            "pairing-synthetic.csv.gz": (
-                f"{results}/evidence/pairing/pairing-synthetic.csv.gz"
-            ),
         },
         "finetune": {
             **progress,
@@ -151,12 +145,6 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             "block-combinations.csv": file_of("block_combinations"),
         },
         "germany": {
-            "pairing-germany.csv.gz": (
-                f"{results}/evidence/pairing/pairing-germany.csv.gz"
-            ),
-            "pairing-germany-rho.csv.gz": (
-                f"{results}/evidence/pairing/pairing-germany-rho.csv.gz"
-            ),
             # The German benchmark's development table, every model.
             "germany-forecasts.csv.gz": (
                 f"{config['germany']['results']}/paper-forecasts.csv.gz"
@@ -210,7 +198,7 @@ def check_development(
 
     A held-out synthetic seed (in `seed` or a synthetic `location`), a
     German row on or after the held-out date, or an Ebola row. With
-    `german` every row is German, as in the German pairing tables.
+    `german` every row is German, as in the German set's tables.
     """
     heldout = config["heldout"]
     seeds = {int(s) for s in heldout["synthetic_seeds"]}

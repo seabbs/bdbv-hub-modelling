@@ -666,85 +666,37 @@ rule sim_examples:
         "--settings {input.settings} --picks {params.picks} --out {output}"
 
 
-# The walk models' scores with no pairing and with the rolling rho_p, on
-# development data only (`nowcasteval.pairing`): the German development
-# half, and the development seeds' outbreaks as the synthetic runner
-# forecasts them. `si_copula` summarises both for the SI's copula figure.
-# A dummy German benchmark leaves them out, and null development
-# simulations the synthetic half and `si_copula`.
-if GERMANY["real"] and FLOW.host_outputs:
-
-    rule pairing_germany:
-        input:
-            TRIANGLE,
-        output:
-            scores=f"{R}/evidence/pairing/pairing-germany.csv.gz",
-            # Each walk model's rolling rho_p by nowcast date and level.
-            rho=FLOW.workflow_evidence()["copula_rho"],
-        log:
-            f"{R}/logs/pairing_germany.log",
-        conda:
-            TOOLS_ENV
-        threads: FORECAST.threads
-        resources:
-            gpu=FORECAST.gpu,
-            heavy=1,
-        params:
-            env=FORECAST.env,
-            germany=GERMANY_CLI,
-            args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-            out=lambda w, output: Path(output.scores).parent,
-        shell:
-            "exec >{log} 2>&1; {params.env} "
-            "{params.germany} pairing-sensitivity {params.args} "
-            "--out {params.out}"
-
-
-if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
-
-    rule pairing_synthetic:
-        input:
-            FLOW.synthetic_simulations("development"),
-        output:
-            f"{R}/evidence/pairing/pairing-synthetic.csv.gz",
-        log:
-            f"{R}/logs/pairing_synthetic.log",
-        conda:
-            TOOLS_ENV
-        threads: FORECAST.threads
-        resources:
-            gpu=FORECAST.gpu,
-            heavy=1,
-        params:
-            env=FORECAST.env,
-            python=PYTHON,
-            sims=lambda w, input: str(Path(input[0]).parent),
-            seeds=FLOW.seeds("development"),
-            samples=config["synthetic"]["samples"],
-        shell:
-            "exec >{log} 2>&1; {params.env} "
-            "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
-            "{output} --seeds {params.seeds} --samples {params.samples}"
-
-
-# The synthetic half made above, or the stored one (`stored`).
-if GERMANY["real"] and FLOW.pairing_germany_file() and FLOW.pairing_synthetic_file():
-
-    rule si_copula:
-        input:
-            FLOW.pairing_germany_file(),
-            FLOW.pairing_synthetic_file(),
-        output:
-            FLOW.workflow_evidence()["si_copula"],
-        log:
-            f"{R}/logs/si_copula.log",
-        conda:
-            TOOLS_ENV
-        params:
-            python=PYTHON,
-        shell:
-            "exec >{log} 2>&1; "
-            "{params.python} -m paperpipe pairing {input} --out {output}"
+# The walk models' scores with no pairing and with the rolling rho_p on
+# the Ebola release backtest (`bdbvhub pairing-sensitivity`), summarised
+# for the SI's copula figure, with each origin's rho_p. The Ebola study is
+# held out, so only a paper run asks for them (`FLOW.ebola_evidence`).
+rule pairing_ebola:
+    input:
+        f"{EBOLA['data']}/target.csv",
+    output:
+        scores=f"{R}/paper/evidence/pairing/pairing-bdbv.csv.gz",
+        rho=FLOW.ebola_files()["copula_rho"],
+        summary=FLOW.ebola_files()["si_copula"],
+    log:
+        f"{R}/logs/pairing_ebola.log",
+    conda:
+        TOOLS_ENV
+    threads: FORECAST.threads
+    resources:
+        heavy=1,
+    params:
+        env=FORECAST.env,
+        bdbv=BDBV,
+        python=PYTHON,
+        data=EBOLA["data"],
+        config=EBOLA["config"],
+        out=lambda w, output: Path(output.scores).parent,
+    shell:
+        "exec >{log} 2>&1; {params.env} "
+        "{params.bdbv} pairing-sensitivity --data {params.data} "
+        "--config {params.config} --out {params.out} && "
+        "{params.python} -m paperpipe pairing {output.scores} "
+        "--out {output.summary}"
 
 
 # The grid's training rounds against the German development half, for
@@ -803,9 +755,11 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
-        # The validation loss curve, the published-range rows, the realism
-        # step's outputs and the pairing scores, from workflow rules.
+        # The validation loss curve, the published-range rows and the
+        # realism step's outputs, from workflow rules.
         **FLOW.workflow_evidence(),
+        # The paper run's Ebola analyses, which development holds out.
+        ebola=lambda w: list(FLOW.ebola_evidence(w.mode).values()),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -816,6 +770,7 @@ rule evidence:
         python=PYTHON,
         args=FLOW.evidence_args(EVIDENCE_NAMES),
         workflow=FLOW.options(FLOW.workflow_evidence()),
+        ebola=lambda w: FLOW.options(FLOW.ebola_evidence(w.mode)),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
         # The live fine-tuning run, whose newest scored checkpoints are
@@ -825,7 +780,7 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
-        "{params.workflow} "
+        "{params.workflow} {params.ebola} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live} {params.comparisons}"
 
@@ -854,7 +809,7 @@ rule summary:
 
 # The host-made development outputs the Site build reads, each set
 # released once per contents as paper-<set>-<hash> (`paperpipe.stored`):
-# the synthetic forecasts and pairing scores, the final run's validation
+# the synthetic forecasts, the final run's validation
 # curve and the runs' checkpoint tables, and the simulation summaries and
 # example seeds. Each set's rule exists on a host that makes its inputs.
 # `promote_paper_<set>` then names that release the set's current one in

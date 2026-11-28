@@ -1,15 +1,17 @@
 """SI tables and figures from results kept on evidence branches.
 
-The copula and the fine-tuning runs write
-their results as rows to evidence branches (see
-`workflow/config.yaml`, block `evidence`). This module turns those rows
-into the SI's tables, figures and quoted numbers, so nothing is typed into
-the paper. A result whose rows are not set yet gets a note saying what it
-waits on in place of its table, and `None` in place of its numbers.
+The fine-tuning runs write their results as rows to evidence branches
+(see `workflow/config.yaml`, block `evidence`), and the paper run's
+Ebola analyses write theirs as workflow outputs (`EBOLA_EVIDENCE`). This
+module turns those rows into the SI's tables, figures and quoted
+numbers, so nothing is typed into the paper. A result whose rows are
+not set yet gets a note saying what it waits on in place of its table,
+and `None` in place of its numbers.
 
-- `copula_figure`: the rolling copula against no pairing, by study and
-  level.
+- `copula_figure`: the rolling copula against no pairing on the Ebola
+  hub, by level.
 - `rho_medians`: the median rolling rho_p of each walk model.
+- `pairing_numbers`: how the rolling copula changed the walks' scores.
 - `realism_figure`: the simulated outbreaks against the data and
   published values.
 - `checkpoint_figure`: relative scores by checkpoint, the German panels of
@@ -48,6 +50,7 @@ from paperpipe.outputs import to_markdown
 __all__ = [
     "BIAS_SUBSETS",
     "COMPARISONS",
+    "EBOLA_EVIDENCE",
     "EVIDENCE",
     "checkpoint_figure",
     "checkpoint_numbers",
@@ -59,6 +62,7 @@ __all__ = [
     "diseases_table",
     "drop_bdbv",
     "live_numbers",
+    "pairing_numbers",
     "realism_figure",
     "realism_numbers",
     "realism_reference",
@@ -623,8 +627,6 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "si_copula": "the walks' scores, no pairing against rolling rho_p",
-    "copula_rho": "the walk models' German rho_p by nowcast date",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
@@ -639,6 +641,15 @@ case study and level), `run`, `outbreaks` (the run's checkpoint) and
 `score` (validation loss, or relative WIS or CRPS against
 `randomwalknowcast`)."""
 
+EBOLA_EVIDENCE: Final = {
+    "si_copula": "the walks' Ebola scores, no pairing against rolling rho_p",
+    "copula_rho": "the walk models' Ebola rho_p by origin",
+}
+"""Each Ebola input and what it waits on until set: the paper run's own
+analyses of the held-out Ebola study (rules pairing_ebola and the
+like), which a development run never reads. Their rows are BDBV rows, so
+`drop_bdbv` leaves them be."""
+
 
 NOT_YET: Final = "(not yet available)"
 """What the paper quotes in place of a number whose rows are not set."""
@@ -651,6 +662,10 @@ QUOTED: Final = {
         m: {"rho_p": NOT_YET, "origins": NOT_YET, "fallback": NOT_YET}
         for m in COPULA_MODELS
     },
+    "pairing": {
+        m: {"national_crps": NOT_YET, "provinces_energy": NOT_YET}
+        for m in COPULA_MODELS
+    },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
@@ -659,13 +674,11 @@ QUOTED: Final = {
 """The numbers the paper quotes, as they read until their rows exist."""
 
 
-COPULA_STUDIES: Final = {
-    "germany": "Germany",
-    "synthetic": "Synthetic",
-}
-"""The copula figure's studies, in its row order, all on development data."""
+COPULA_STUDIES: Final = {"bdbv": "Ebola"}
+"""The copula figure's studies, in its row order: the Ebola hub only, by
+its rows' study (`bdbvhub.pairing`)."""
 
-COPULA_LEVELS: Final = ("national", "provinces", "states")
+COPULA_LEVELS: Final = ("national", "provinces")
 """The levels the copula changes: the country, which is the sum of the
 provinces (or states), and the provinces themselves. Zones are not
 paired."""
@@ -681,15 +694,15 @@ on log counts of the level's places and weeks as one vector."""
 
 
 def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return each walk model's median rolling rho_p between German states.
+    """Return each walk model's median rolling rho_p between provinces.
 
-    `rho` has the walk models' German rows (`nowcasteval.pairing.
+    `rho` has the walk models' Ebola rows (`nowcasteval.pairing.
     RHO_COLUMNS`): `model`, `origin`, `level`, `n_scores`,
-    `rho_provinces`, `n_pairs` and `fallback`, one per task. Only the
-    states tasks count, as rho_p pairs provinces. Tasks that fell back to
-    the prior for want of pairs are counted, not in the median.
+    `rho_provinces`, `n_pairs` and `fallback`, one per origin. Only the
+    provinces rows count, as rho_p pairs provinces. Origins that fell
+    back to the prior for want of pairs are counted, not in the median.
     """
-    rho = rho.loc[rho["level"] == "states"]
+    rho = rho.loc[rho["level"] == "provinces"]
     fallback = rho["fallback"].astype(str).str.lower() == "true"
     out: dict = {}
     for model, g in rho.groupby("model", sort=False):
@@ -700,6 +713,37 @@ def rho_medians(rho: pd.DataFrame) -> dict:
             "origins": int(g["origin"].nunique()),
             "fallback": int(own.sum()),
         }
+    return out
+
+
+def _change(ratio: float) -> str:
+    """Return a ratio as the signed percentage change it is."""
+    return f"{100 * (ratio - 1):+.1f}%"
+
+
+def pairing_numbers(rows: pd.DataFrame) -> dict:
+    """Return how the rolling copula changed each walk model's scores.
+
+    `rows` are `summarise_pairing`'s (`copula_figure`). For each model,
+    `national_crps` is the change in the CRPS of the national sum and
+    `provinces_energy` in the energy score of the provinces on log
+    counts, rolling against no pairing, as signed percentages.
+    """
+    out = {m: dict(v) for m, v in QUOTED["pairing"].items()}
+    picks = {
+        "national_crps": ("national", "cell", "crps"),
+        "provinces_energy": ("provinces", "joint", "log_energy"),
+    }
+    for model, g in rows.groupby("model"):
+        node = out.setdefault(str(model), {})
+        for key, (level, target, metric) in picks.items():
+            one = g.loc[
+                (g["level"] == level)
+                & (g["target"] == target)
+                & (g["metric"] == metric)
+            ].set_index("variant")["value"]
+            if {"off", "rolling"} <= set(one.index):
+                node[key] = _change(float(one["rolling"] / one["off"]))
     return out
 
 
@@ -839,7 +883,8 @@ def write_evidence(
     Parameters
     ----------
     paths : mapping
-        `EVIDENCE` name to its file, or None while it is not set.
+        `EVIDENCE` or `EBOLA_EVIDENCE` name to its file; a name missing
+        or None is not set.
     si_dir, fig_dir : pathlib.Path
         Folders for the SI tables and figures.
     out_yml : pathlib.Path
@@ -859,9 +904,9 @@ def write_evidence(
     """
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
-    data = {name: _read(paths, name) for name in EVIDENCE}
+    data = {name: _read(paths, name) for name in EVIDENCE | EBOLA_EVIDENCE}
     for name, frame in data.items():
-        if frame is not None and name != "sim_realism":
+        if frame is not None and name in EVIDENCE and name != "sim_realism":
             kept = drop_bdbv(frame)
             data[name] = None if kept.empty else kept
     raw = data["checkpoint_scores"]
@@ -871,7 +916,11 @@ def write_evidence(
         if raw is not None and name in pairs:
             rows = comparison_rows(raw, run, *compared(name, pairs))
         data[f"compare_{name}"] = None if rows is None or rows.empty else rows
-    waits = EVIDENCE | {f"compare_{n}": d for n, (d, _) in COMPARISONS.items()}
+    waits = (
+        EVIDENCE
+        | EBOLA_EVIDENCE
+        | {f"compare_{n}": d for n, (d, _) in COMPARISONS.items()}
+    )
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
         # Rows for another study only still leave this one waiting.
@@ -948,6 +997,9 @@ def write_evidence(
     numbers = {
         "evidence": {
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
+            "pairing": (
+                QUOTED["pairing"] if cop is None else pairing_numbers(cop)
+            ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
             "realism": (

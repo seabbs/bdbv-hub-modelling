@@ -42,7 +42,12 @@ from paperpipe.config import (
     keep_finetuned,
     run_settings,
 )
-from paperpipe.evidence import EVIDENCE, realism_reference, write_evidence
+from paperpipe.evidence import (
+    EBOLA_EVIDENCE,
+    EVIDENCE,
+    realism_reference,
+    write_evidence,
+)
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     joint_table,
@@ -201,7 +206,13 @@ def _joint(a: argparse.Namespace) -> None:
 
 
 def _evidence(a: argparse.Namespace) -> None:
-    paths = {name: getattr(a, name) for name in EVIDENCE}
+    paths = {name: getattr(a, name) for name in EVIDENCE | EBOLA_EVIDENCE}
+    ebola = [n for n in EBOLA_EVIDENCE if paths[n] is not None]
+    if a.mode != "paper" and ebola:
+        raise ValueError(
+            "The Ebola study is held out of development runs, so a "
+            f"{a.mode} run cannot read {', '.join(ebola)}."
+        )
     pairs = dict(c.split("=", 1) for c in a.comparison)
     numbers = write_evidence(
         paths, a.si_dir, a.fig_dir, a.out, run=a.live_run, comparisons=pairs
@@ -405,7 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=_joint)
 
     p = sub.add_parser("evidence")
-    for name in EVIDENCE:
+    for name in EVIDENCE | EBOLA_EVIDENCE:
         p.add_argument(f"--{name.replace('_', '-')}", type=Path, default=None)
     p.add_argument("--mode", required=True)
     p.add_argument("--si-dir", type=Path, required=True)
