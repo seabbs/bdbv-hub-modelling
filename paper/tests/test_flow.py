@@ -438,6 +438,7 @@ def test_the_copula_evidence_is_the_ebola_hub_s_in_a_paper_run_only() -> None:
     files = flow.ebola_evidence("paper")
     assert files["si_copula"].endswith("paper/evidence/si-copula.csv")
     assert files["copula_rho"].endswith("pairing/pairing-bdbv-rho.csv.gz")
+    assert files["coupling"].endswith("paper/evidence/coupling.csv")
     assert "si_copula" not in flow.workflow_evidence()
     assert "copula_rho" not in flow.workflow_evidence()
 

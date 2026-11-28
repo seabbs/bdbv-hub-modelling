@@ -660,3 +660,47 @@ def test_the_pairing_step_summarises_the_scores(tmp_path) -> None:
     assert sorted(got["study"].unique()) == ["germany", "synthetic"]
     rolling = got.loc[got["variant"] == "rolling", "relative"]
     assert (rolling == 0.5).all()
+
+
+def _coupling() -> pd.DataFrame:
+    """`nowcasteval.coupling.summary` rows against the copula."""
+    return pd.DataFrame(
+        [
+            {
+                "model": "foundation",
+                "coupling": c,
+                "score": s,
+                "ratio": r,
+                "lower": r,
+                "upper": r,
+                "cover90": 0.9,
+                "n_origins": 8,
+            }
+            for c, r in (
+                ("gaussian", 1.0),
+                ("independent", 1.05),
+                ("comonotone", 0.98),
+            )
+            for s in ("energy", "log_energy", "sum_crps")
+        ]
+    )
+
+
+def test_the_coupling_change_is_quoted_and_tabled(tmp_path) -> None:
+    out = write_evidence(
+        {}, tmp_path / "si", tmp_path / "f", tmp_path / "e.yml"
+    )
+    assert out["evidence"]["coupling"]["independent"] == "(not yet available)"
+    assert "waits on" in (tmp_path / "si" / "coupling.md").read_text()
+    rows = tmp_path / "coupling.csv"
+    _coupling().to_csv(rows, index=False)
+    out = write_evidence(
+        {"coupling": rows}, tmp_path / "si", tmp_path / "f", tmp_path / "e.yml"
+    )
+    assert out["evidence"]["coupling"] == {
+        "independent": "+5.0%",
+        "comonotone": "-2.0%",
+    }
+    table = (tmp_path / "si" / "coupling.md").read_text()
+    assert "Independent" in table
+    assert "Comonotone" in table

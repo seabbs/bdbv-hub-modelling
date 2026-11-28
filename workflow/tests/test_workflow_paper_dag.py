@@ -63,7 +63,9 @@ def test_the_copula_scores_are_the_ebola_hub_s_in_a_paper_run(tmp_path):
     out = dry_run(tmp_path, "paper", quiet=False, extra=["-p"])
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule pairing_ebola:" in out.stdout
+    assert "rule coupling_ebola:" in out.stdout
     assert "--si-copula" in out.stdout
+    assert "--coupling" in out.stdout
     assert "--copula-rho" in out.stdout
 
 
@@ -71,7 +73,12 @@ def test_a_development_run_has_no_copula_scores(tmp_path):
     # The copula analyses are the Ebola hub's, which development holds out.
     out = dry_run(tmp_path, "development", quiet=False, extra=["-p"])
     assert out.returncode == 0, out.stderr + out.stdout
-    for rule in ("pairing_ebola", "pairing_germany", "pairing_synthetic"):
+    for rule in (
+        "pairing_ebola",
+        "coupling_ebola",
+        "pairing_germany",
+        "pairing_synthetic",
+    ):
         assert f"rule {rule}:" not in out.stdout
     assert "--si-copula" not in out.stdout
     assert "--copula-rho" not in out.stdout
