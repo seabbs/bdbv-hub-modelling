@@ -175,6 +175,7 @@ def test_a_run_on_real_data_alone_is_its_final_checkpoint() -> None:
         _real_only(_scores()), "one-model", "realdata", labels
     )
     real = out.loc[out["run"] == labels[1]]
+    assert labels[1] == "real data alone"
     assert not real.empty
     assert set(real["outbreaks"]) == {125, 1000}
     assert set(real["score"]) == {2.2}

@@ -29,6 +29,13 @@ def test_the_real_data_run_is_the_recipe_on_real_data():
     assert "realdata" not in runs.trained(cfg, found)
 
 
+def test_the_real_data_run_trains_on_real_data_alone():
+    # No simulations and no German blocks mixed into them.
+    _, found = _found()
+    assert found["realdata"].ft["real_training"] is None
+    assert not any(r.ft["real_training"] for r in found.values())
+
+
 def test_the_real_trainer_takes_the_run_s_recipe():
     _, found = _found()
     opts = runs.real_trainer_options(found["realdata"])

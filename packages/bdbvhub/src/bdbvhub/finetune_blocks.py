@@ -37,6 +37,7 @@ from nowcastbdbv.data.zones import ZoneData, hub_places, load_zone_data
 from nowcasteval.backtest import BacktestConfig, load_config
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import realtasks as rt
+from nowcastutils.releases import cumulative_first_release
 
 FINETUNE_CONFIG = ft.ROOT / "packages/nowcastfoundation/config/finetune.toml"
 """The fine-tuning settings, with the BDBV cut `[realdata_bdbv]`."""
@@ -111,9 +112,17 @@ def load_inputs(data: Path | str) -> Inputs:
 
 
 def releases(inputs: Inputs, cut: RealdataCut) -> list[str]:
-    """Return every real release up to the cut, oldest first."""
-    real = inputs.target.loc[inputs.target["kind"] == "real", "vintage"]
-    return sorted({str(v) for v in real if str(v) <= cut.release})
+    """Return every real release up to the cut, oldest first.
+
+    A cumulative first release is left out, as the Ebola study leaves it
+    out (`nowcastutils.releases.cumulative_first_release`): it holds the
+    counts to date, not how they were reported.
+    """
+    real = inputs.target.loc[inputs.target["kind"] == "real"]
+    dump = cumulative_first_release(real, inputs.config.max_delay)
+    return sorted(
+        {str(v) for v in real["vintage"] if str(v) <= cut.release} - {dump}
+    )
 
 
 def _task(inputs: Inputs, vintage: str) -> Any:
@@ -138,8 +147,12 @@ def realdata_blocks(
     """Return the blocks of every release up to the cut, oldest first.
 
     Each release's task is laid out once as the fine-tuned model forecasts
-    it, with the cut's release's counts to `cut.truth_until` as the truth.
+    it, at the study's maximum delay's lags (`max_delay`), with the cut's
+    release's counts to `cut.truth_until` as the truth.
     """
+    max_delay = inputs.config.max_delay
+    if max_delay is None:
+        raise ValueError("the Ebola forecasts' config sets no max_delay")
     model = rt.real_model(block_limit)
     truth = rt.truth_of(model, _task(inputs, cut.release), cut.truth_until)
     rng = np.random.default_rng(seed)
@@ -147,7 +160,14 @@ def realdata_blocks(
     for vintage in releases(inputs, cut):
         task = _task(inputs, vintage)
         out += rt.task_blocks(
-            model, task, truth, rng, data="bdbv", mix="bdbv", cut=vintage
+            model,
+            task,
+            truth,
+            rng,
+            int(max_delay),
+            data="bdbv",
+            mix="bdbv",
+            cut=vintage,
         )
     return out
 

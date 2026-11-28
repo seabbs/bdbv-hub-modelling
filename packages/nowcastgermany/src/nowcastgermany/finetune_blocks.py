@@ -235,15 +235,12 @@ class RealdataWindow:
         The last report date used: the last day of the development half.
     truth_delay : int
         Days a count must have had by `as_of` to be truth.
-    first_cut : str
-        The first nowcast date cut.
     held_out_dates : int
         The latest nowcast dates held out to monitor the loss.
     """
 
     as_of: str
     truth_delay: int
-    first_cut: str
     held_out_dates: int
 
     @property
@@ -252,9 +249,14 @@ class RealdataWindow:
         day = dt.date.fromisoformat(self.as_of)
         return (day - dt.timedelta(days=self.truth_delay)).isoformat()
 
-    def cuts(self) -> list[str]:
-        """Every nowcast date from `first_cut` with its truth by then."""
-        return cut_dates(self.first_cut, self.truth_until)
+    @property
+    def max_delay(self) -> int:
+        """The German forecasts' maximum delay: the truth delay, in days."""
+        return self.truth_delay
+
+    def cuts(self, first: str) -> list[str]:
+        """Every nowcast date from `first` with its truth by then."""
+        return cut_dates(first, self.truth_until)
 
 
 def realdata_window(path: Path | str = FINETUNE_CONFIG) -> RealdataWindow:
@@ -266,7 +268,6 @@ def realdata_window(path: Path | str = FINETUNE_CONFIG) -> RealdataWindow:
     return RealdataWindow(
         as_of=str(raw["as_of"]),
         truth_delay=int(raw["truth_delay"]),
-        first_cut=str(raw["first_cut"]),
         held_out_dates=int(raw["held_out_dates"]),
     )
 
@@ -293,6 +294,11 @@ def realdata_triangle(path: Path | str, as_of: str) -> pd.DataFrame:
     return tri.loc[tri["report_date"] <= as_of].reset_index(drop=True)
 
 
+def first_date(triangle: pd.DataFrame) -> str:
+    """Return the triangle's first Meldedatum, its first nowcast date."""
+    return str(triangle["reference_date"].min())
+
+
 def realdata_blocks(
     triangle: pd.DataFrame,
     window: RealdataWindow,
@@ -303,9 +309,10 @@ def realdata_blocks(
     """Return the real-data checkpoint's German blocks, in cut order.
 
     Each nowcast date's tasks (`data.nowcast_tasks`: Germany with its
-    states, and Germany with its age groups), laid out as the fine-tuned
-    model forecasts them (`finetune.realtasks.task_blocks`), with the
-    counts as available on `window.as_of` as the truth, to
+    states, and Germany with its age groups), from the triangle's first
+    date by default, laid out as the fine-tuned model forecasts them
+    (`finetune.realtasks.task_blocks`) at the truth delay's lags, with
+    the counts as available on `window.as_of` as the truth, to
     `window.truth_until`.
     """
     horizons = task_horizons()
@@ -316,11 +323,20 @@ def realdata_blocks(
     ]
     rng = np.random.default_rng(seed)
     out = []
-    for cut in cuts if cuts is not None else window.cuts():
+    if cuts is None:
+        cuts = window.cuts(first_date(triangle))
+    for cut in cuts:
         tasks = de.nowcast_tasks(triangle, cut, 1, seed, horizons)
         for task, truth in zip(tasks, truths, strict=True):
             out += rt.task_blocks(
-                model, task, truth, rng, data="germany", mix="germany", cut=cut
+                model,
+                task,
+                truth,
+                rng,
+                window.max_delay,
+                data="germany",
+                mix="germany",
+                cut=cut,
             )
     return out
 
@@ -336,7 +352,7 @@ def make_realdata_blocks(
     blocks = realdata_blocks(triangle, window, block_limit=block_limit)
     with out.open("wb") as f:
         pickle.dump(blocks, f)
-    cuts = window.cuts()
+    cuts = window.cuts(first_date(triangle))
     print(
         f"{len(blocks)} blocks of {len(cuts)} nowcast dates {cuts[0]} to "
         f"{cuts[-1]}, reports to {window.as_of}, truth to "

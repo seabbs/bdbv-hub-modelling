@@ -125,11 +125,14 @@ def test_the_realdata_window_is_the_development_half():
     assert window.as_of == "2022-02-09"
     assert window.truth_delay == german["truth"]["delay"]
     assert window.truth_until == "2021-12-31"
-    cuts = window.cuts()
-    # Every nowcast date with its truth by then, each cut once.
-    assert (cuts[0], cuts[-1]) == ("2021-04-20", "2021-12-03")
-    assert len(cuts) == len(set(cuts)) == 228
+    # Every nowcast date from the triangle's first with its truth by
+    # then, each cut once.
+    cuts = window.cuts("2021-04-06")
+    assert (cuts[0], cuts[-1]) == ("2021-04-06", "2021-12-03")
+    assert len(cuts) == len(set(cuts)) == 242
     assert window.held_out_dates == 14
+    # The German forecasts' maximum delay: the benchmark's truth delay.
+    assert window.max_delay == 40
 
 
 def test_the_realdata_triangle_holds_nothing_after_the_window(tmp_path):
@@ -149,7 +152,6 @@ def _window(**kw) -> "fg.RealdataWindow":
     base = {
         "as_of": "2021-07-31",
         "truth_delay": 40,
-        "first_cut": "2021-04-20",
         "held_out_dates": 2,
     }
     return fg.RealdataWindow(**(base | kw))
@@ -159,14 +161,23 @@ def _window(**kw) -> "fg.RealdataWindow":
 def test_realdata_blocks_are_the_german_tasks_as_forecast(tmp_path):
     # Each nowcast date's tasks (Germany with its states, Germany with its
     # age groups) laid out as the fine-tuned model forecasts them: daily
-    # with 7-day rows, the data rule's lag count.
+    # with 7-day rows, at the maximum delay's lags, or what the history
+    # holds when it is shorter.
     path = tmp_path / "triangle.csv"
     _wide(200).to_csv(path, index=False)
     window = _window()
     tri = fg.realdata_triangle(path, window.as_of)
-    cuts = window.cuts()[:3]
-    blocks = fg.realdata_blocks(tri, window, cuts, block_limit=1000)
-    assert {b["cut"] for b in blocks} == set(cuts)
+    cuts = window.cuts(fg.first_date(tri))
+    # From the first usable date, not once a full history exists.
+    assert cuts[0] == "2021-03-01"
+    # The first date with two days of context gives blocks.
+    some = [*cuts[2:5], cuts[60]]
+    blocks = fg.realdata_blocks(tri, window, some, block_limit=1000)
+    assert {b["cut"] for b in blocks} == set(some)
+    early = [b["lag"] for b in blocks if b["cut"] == some[0]]
+    late = [b["lag"] for b in blocks if b["cut"] == some[-1]]
+    assert max(early) < window.max_delay + 1
+    assert all(abs(lag - (window.max_delay + 1)) <= 8 for lag in late)
     for b in blocks:
         assert set(BLOCK_KEYS) <= set(b)
         assert b["data"] == "germany"
