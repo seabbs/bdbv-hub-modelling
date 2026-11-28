@@ -1114,3 +1114,37 @@ def test_the_release_origins_name_the_stored_fit_scored(tmp_path: Path) -> None:
     assert got.loc["renewalsp", "status"] == "no forecast"
     assert got.loc["renewalsp", "n_reported"] == 0
     assert pd.isna(got.loc["randomwalk", "fit"])
+
+
+@pytest.mark.usefixtures("in_root")
+def test_the_paper_backtest_runs_stored_models_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The paper's own release backtest runs the fine-tuned model from its
+    # final checkpoint, though `bdbvhub backtest` leaves it to the store.
+    from bdbvhub import cli
+    from bdbvhub.store.store import stored_models
+
+    assert "foundation" in stored_models()
+    ran: list[str] = []
+
+    class Ran(Exception):
+        pass
+
+    def run(origins, *args, **kwargs):
+        ran.extend(m.name for m in origins)
+        raise Ran
+
+    monkeypatch.setattr(cli.bdbv_bt, "run_development", run)
+    monkeypatch.setattr(cli, "get_model", lambda n: type("M", (), {"name": n}))
+    args = ["--data", str(DATA), "--models", "randomwalk", "foundation"]
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    with pytest.raises(Ran):
+        cli.paper_backtest([*args, *out])
+    # The walks still forecast each release's snapshots alone.
+    assert ran == ["foundation"]
+    # The submission's command line still leaves it to the store.
+    ran.clear()
+    with pytest.raises(Ran):
+        main(["backtest", *args, *out])
+    assert ran == []

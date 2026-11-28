@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import datetime as dt
 import hashlib
 import importlib.util
@@ -1350,3 +1351,50 @@ def test_a_sampler_s_parts_are_put_back_together_by_view(
     )
     weekly, _ = model.forecast_both(task)
     assert set(weekly["location"]) >= {"CD", *_zones(task)}
+
+
+def _real_segment(tmp_path: Path) -> Path:
+    """A real-data run's final segment folder, as `train_real` saves it."""
+    segment = tmp_path / "realdata" / "train" / "n1000"
+    (segment / "finetuned-ckpt").mkdir(parents=True)
+    for name, data in _ADAPTER.items():
+        (segment / "finetuned-ckpt" / name).write_bytes(data)
+    (segment / "settings.json").write_text(
+        '{"hash": "de", "series_bias": true, "data": "real"}'
+    )
+    return segment
+
+
+def test_a_run_pins_the_realdata_checkpoint_to_its_own_segment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The paper's workflow pins the real-data run's final segment, as it
+    # pins the simulation checkpoint (`FINETUNED_ENV`), whatever the TOML.
+    segment = _real_segment(tmp_path)
+    monkeypatch.setenv(foundation.REALDATA_ENV, str(segment))
+    checkpoint = foundation.realdata_checkpoint()
+    assert checkpoint.hash == "de"
+    assert checkpoint.tag == "realdata-ft-de"
+    assert checkpoint.sha256 == _checkpoint("de").sha256
+    assert checkpoint.path == str(segment / "finetuned-ckpt")
+    assert foundation.realdata_available()
+
+
+def test_a_run_pins_the_realdata_checkpoint_to_a_hash(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    write_release(releases, "de", _ADAPTER, "de", prefix="realdata-ft")
+    monkeypatch.setenv(foundation.REALDATA_ENV, "de")
+    checkpoint = foundation.realdata_checkpoint()
+    assert checkpoint.tag == "realdata-ft-de"
+
+
+def test_without_a_pin_the_realdata_checkpoint_is_the_toml_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(foundation.REALDATA_ENV, raising=False)
+    monkeypatch.setattr(foundation, "realdata_spec", lambda: "abc123")
+    fake = functools.cache(lambda spec, *_: (spec, *_))
+    monkeypatch.setattr(foundation, "resolve_checkpoint", fake)
+    assert foundation.realdata_checkpoint() == ("abc123", "realdata-ft")
+    assert foundation.realdata_available() == foundation.realdata_pinned()

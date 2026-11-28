@@ -81,6 +81,14 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     assert flow.finetuned_env() == f"BDBV_CHRONOS_FT={segment}"
     assert "BDBV_CHRONOS_FT" not in os.environ
     assert flow.realdata_after == "2026-08-01"
+    # `foundation_real` loads the real-data run's final checkpoint, a
+    # rule input, as the `_ft` models load the final run's.
+    real = CONFIG["runs"]["realdata"]["prefixes"][-1]
+    segment = root / "runs" / "realdata" / "train" / f"n{real}"
+    assert config["realdata_record"] == f"{segment}/published.json"
+    assert flow.realdata_inputs() == [f"{segment}/published.json"]
+    assert flow.realdata_env() == f"BDBV_CHRONOS_REAL={segment}"
+    assert "BDBV_CHRONOS_REAL" not in os.environ
 
 
 def test_with_no_saved_checkpoint_the_fine_tuned_models_are_pending(
@@ -102,6 +110,16 @@ def test_with_no_saved_checkpoint_the_fine_tuned_models_are_pending(
     )
     assert config["finetuned_record"] is None
     assert flow.finetuned_env() == ""
+    # Without a real-data run, `foundation_real` is pending too.
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    config["realdata_run"] = None
+    flow = PaperFlow.load(
+        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
+    )
+    assert config["realdata_record"] is None
+    assert flow.realdata_inputs() == []
+    assert flow.realdata_env() == ""
     assert "BDBV_CHRONOS_FT" not in os.environ
 
 
@@ -206,27 +224,45 @@ def test_ebola_sources_name_every_input() -> None:
 CHRONOS = (
     "foundation_zeroshot_complete",
     "foundation_zeroshot",
+    "foundation",
     "foundation_zeroshot_baselinenowcast",
     "foundation_baselinenowcast",
+    "foundation_real",
 )
 """The Chronos-2 models the paper's own Ebola backtest runs."""
 
 
 def test_ebola_runs_every_study_s_chronos_set() -> None:
-    # The fine-tuned ragged model is the fit store's (`foundation` is a
-    # stored model, which `bdbvhub backtest` never runs); the rest run in
-    # the paper's own release backtest.
+    # Every Chronos-2 model runs in the paper's own release backtest, the
+    # fine-tuned ragged model (`foundation`) from the final checkpoint, as
+    # in the other studies, not from the fit store, and the real-data
+    # model from the real-data run's final checkpoint.
     models = CONFIG["ebola"]["backtest_models"]
     assert set(models) >= {"randomwalk", "randomwalknowcast", *CHRONOS}
-    assert "foundation" not in models
 
 
 def test_the_ebola_fine_tuned_models_wait_for_the_final_checkpoint() -> None:
     pending = _flow().ebola_draws_models()
-    assert "foundation_baselinenowcast" not in pending
+    for model in ("foundation", "foundation_baselinenowcast"):
+        assert model not in pending
+    assert "foundation_real" not in pending
     assert {"randomwalknowcast", "foundation_zeroshot"} <= set(pending)
     ready = _flow(finetuned_record="runs/finetuned/train/n1/published.json")
-    assert "foundation_baselinenowcast" in ready.ebola_draws_models()
+    for model in ("foundation", "foundation_baselinenowcast"):
+        assert model in ready.ebola_draws_models()
+    assert "foundation_real" not in ready.ebola_draws_models()
+    real = _flow(realdata_record="runs/realdata/train/n1/published.json")
+    assert "foundation_real" in real.ebola_draws_models()
+    assert "foundation" not in real.ebola_draws_models()
+
+
+def test_the_paper_s_ebola_backtest_runs_the_stored_model_itself() -> None:
+    # `bdbvhub backtest` leaves `foundation` to the fit store; the paper's
+    # own command (`bdbvhub.cli.paper_backtest`) runs it.
+    command = _flow().ebola_draws_command()
+    assert command.endswith("paper/scripts/ebola_backtest.py")
+    script = Path(__file__).parents[1] / "scripts" / "ebola_backtest.py"
+    assert "paper_backtest" in script.read_text()
 
 
 def test_the_site_backtest_runs_the_walks_only() -> None:

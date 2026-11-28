@@ -191,6 +191,38 @@ def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
         assert f"rule {rule}" in paper.stdout + paper.stderr
 
 
+def test_the_german_held_out_run_loads_the_real_data_checkpoint(
+    tmp_path: Path,
+) -> None:
+    # `foundation_real` joins the German test period from the real-data
+    # run's final checkpoint, an input of the rule, as the `_ft` models
+    # load the final run's.
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {
+                    "data": str(tmp_path / "germany"),
+                    "results": str(tmp_path / "germany-results"),
+                },
+                "ebola": {"hub": str(tmp_path / "hub")},
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    res = _snakemake("paper", "-n", "-p", "--configfile", base, str(cfg))
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    held = [
+        ln for ln in log.splitlines() if "backtest" in ln and "--held-out" in ln
+    ]
+    assert held
+    assert all("BDBV_CHRONOS_REAL=" in ln for ln in held)
+    assert "realdata/train/n" in log
+
+
 def test_only_the_paper_runs_ebola_scoring_every_round(
     tmp_path: Path,
 ) -> None:
@@ -306,12 +338,16 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     assert CONFIG["ebola"]["n_samples"] == 1000
     # The zero-shot Chronos-2 models run there too, and a fine-tuned one
     # loads the final checkpoint, as in the other studies.
-    draws = [ln for ln in log.splitlines() if "backtest --config" in ln]
+    draws = [ln for ln in log.splitlines() if "ebola_backtest.py" in ln]
     assert draws
     for line in draws:
         assert "foundation_zeroshot_baselinenowcast" in line
-        if "foundation_baselinenowcast" in line.split():
-            assert "BDBV_CHRONOS_FT=" in line
+        assert "bdbvhub backtest" not in line
+        for model in ("foundation", "foundation_baselinenowcast"):
+            if model in line.split():
+                assert "BDBV_CHRONOS_FT=" in line
+        if "foundation_real" in line.split():
+            assert "BDBV_CHRONOS_REAL=" in line
         # The device and threads prefix the backtest, not the mkdir.
         command = line.split(" && ")[-1]
         assert "DEVICE=" in command
