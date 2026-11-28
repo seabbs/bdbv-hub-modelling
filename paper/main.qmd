@@ -260,9 +260,10 @@ The grid shows group attention at one step, with three series per place.
 (A) What we fine-tune Chronos-2 on.
 Zero-shot Chronos-2 is used as pretrained, and each fine-tuned model trains LoRA adapters on simulated or real data.
 Each glyph shows the model's input block and attention biases as in Figure 1.
-The ablations of the fine-tuned model drop some attention biases or the lag series.
-(B) Which studies each model is run in, with the maximum delay set for each hub.
-Labels give the data a model is scored on where it differs.
+The ablations are the fine-tuned model retrained with no attention biases, with only the same-place or only the parent and child attention biases, or without lag series.
+(B) Each model, with our two baselines, linked through what it is given to the studies it is run in, in the model's colour.
+The nowcast is the random walk nowcast given to Chronos-2 as complete counts.
+Notes give the data a model is scored on where it differs.
 Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig-design}
 
 ### Evaluation on held-out synthetic data
@@ -352,8 +353,8 @@ Stars mark the models submitted to the Ebola hub.](figures/fig2-design.svg){#fig
 - Zero-shot, this is how the Ebola hub teams that use foundation models use them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development period and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
-- Besides the main model, which has all three attention biases, we fine-tuned models with no biases, with the same-place bias only, and with the parent and child biases only.
-- We also fine-tuned one model without lag series.
+- Besides the main model, which has all three attention biases, we fine-tuned ablations with no attention biases, with only the same-place attention bias, and with only the parent and child attention biases (@fig-design A).
+- We also fine-tuned one ablation without lag series (@fig-design A).
 - For the Ebola hub only, we compared the random walk nowcast's rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
 - We scored the real-data fine-tune on the German test period, and on the Ebola rounds after its last training release.

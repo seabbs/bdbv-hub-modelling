@@ -13,7 +13,9 @@ The panels are:
   to zero-shot use and to LoRA fine-tunes on simulated or real data,
   with the main fine-tuned model's ablations as its leaves. Each
   fine-tuned model's node carries a small input block glyph;
-- B, how the models are used: a web linking each model to the studies
+- B, how the models are used: a flow from each model of panel A and
+  our two baselines, through what it is given (complete counts, a
+  nowcast as complete counts or the reporting triangle), to the studies
   it is run in (held-out simulations, the German nowcast hub and the
   Ebola forecasting hub), starred where submitted to the Ebola hub.
 
@@ -295,126 +297,187 @@ def panel_a(g: Svg, oy: float) -> float:
     return bottom
 
 
-# Panel B: the studies, name and maximum delay.
+# Panel B: the models, named and glyphed as in panel A, then our two
+# baselines. Each has a name, a note, a glyph or None and a height.
+ZS, FT, AB, RD, RW, RN = range(6)
+MODELS = (
+    ("Zero-shot", [], None, 16.0),
+    ("Fine-tuned", ["all attention biases"], (True, ALL_BIASES), 26.0),
+    ("Ablations", ["of attention biases", "and lag series"], None, 26.0),
+    (
+        "Real data",
+        ["Germany to 9 Feb 2022", "Ebola hub to 8 Nov 2026"],
+        (True, ALL_BIASES),
+        32.0,
+    ),
+    ("Random walk nowcast", [], None, 16.0),
+    ("Renewal models", [], None, 16.0),
+)
+SUBMITTED = (FT, RW, RN)
+
+# Panel B: one colour per model, its node's stripe and its links
+# (colour-blind safe, after Okabe and Ito and Tol).
+MODEL_COLOURS = (
+    "#E69F00",
+    ACCENT,
+    "#AA3377",
+    "#332288",
+    "#D55E00",
+    "#555555",
+)
+
+# Panel B: what each model is given, a name and a note.
+CC, NC, RT = range(3)
+INPUTS = (
+    ("Complete counts", ["latest counts, no lags"]),
+    ("Nowcast", ["random walk nowcast", "as complete counts"]),
+    ("Reporting triangle", ["counts and lag series"]),
+)
+
+# Panel B: the studies, a name and the maximum delay.
+S, G, E = range(3)
 STUDIES = (
     ("Held-out simulations", ""),
     ("German nowcast hub", "max delay 40 d"),
     ("Ebola forecasting hub", "max delay 42 d"),
 )
-S, G, E = range(3)
 
-# Panel B: the models, ordered to keep links from crossing. Each has a
-# name, a glyph or None, and its links as (study, label, submitted).
-ALL3 = ((S, "", False), (G, "", False), (E, "", False))
-MODELS = (
-    (
-        "Fine-tuning ablations",
-        None,
-        ((S, "validation", False), (G, "development period", False)),
-    ),
-    ("Zero-shot, complete counts", (False, ()), ALL3),
-    ("Zero-shot, reporting triangle", (True, ()), ALL3),
-    ("Nowcast \u2192 Chronos-2", None, ALL3),
-    (
-        "Fine-tuned",
-        (True, ALL_BIASES),
-        ((S, "", False), (G, "", False), (E, "", True)),
-    ),
-    (
-        "Random walk nowcast",
-        None,
-        ((S, "", False), (G, "", False), (E, "", True)),
-    ),
-    ("Renewal models", None, ((E, "", True),)),
-    (
-        "Real-data fine-tune",
-        None,
-        ((G, "test period", False), (E, "after 8 Nov 2026", False)),
-    ),
+# Panel B: the flows, as (model, input, studies, width). Each study is
+# (study, note), the note naming the data scored where it differs.
+THIN = 0.8
+FLOWS = (
+    (ZS, CC, ((S, ""), (G, ""), (E, ""))),
+    (ZS, NC, ((S, ""), (G, ""), (E, ""))),
+    (ZS, RT, ((S, ""), (G, ""), (E, ""))),
+    (FT, NC, ((S, ""), (G, ""), (E, ""))),
+    (FT, RT, ((S, ""), (G, ""), (E, ""))),
+    (AB, CC, ((S, ""), (G, ""))),
+    (AB, RT, ((S, "validation"), (G, "development period"))),
+    (RD, RT, ((G, "test period"), (E, "after 8 Nov 2026"))),
+    (RW, RT, ((S, ""), (G, ""), (E, ""))),
+    (RN, RT, ((E, ""),)),
 )
 
 
-# Panel B: one colour per model, its node's stripe and its links
-# (colour-blind safe, after Okabe and Ito and Tol).
-MODEL_COLOURS = {
-    "Fine-tuning ablations": "#AA3377",
-    "Zero-shot, complete counts": "#E69F00",
-    "Zero-shot, reporting triangle": "#56B4E9",
-    "Nowcast \u2192 Chronos-2": "#B5A33A",
-    "Fine-tuned": ACCENT,
-    "Random walk nowcast": "#D55E00",
-    "Renewal models": "#555555",
-    "Real-data fine-tune": "#332288",
-}
+def flow_width(model: int, inp: int) -> float:
+    """Return a link's width: thin for the no-lags ablation."""
+    return THIN if (model, inp) == (AB, CC) else 1.5
+
+
+def stack(
+    links: list[tuple[float, float, object]], top: float, h: float
+) -> dict[object, float]:
+    """Centre a stack of links on an edge, in order of their sort key.
+
+    Each link is (sort key, width, id); returns each id's centre.
+    """
+    gap = 0.4
+    total = sum(w for _, w, _ in links) + gap * (len(links) - 1)
+    y = top + (h - total) / 2
+    out = {}
+    for _, w, key in sorted(links, key=lambda t: t[0]):
+        out[key] = y + w / 2
+        y += w + gap
+    return out
+
+
+def spread(heights: list[float], top: float, bottom: float) -> list[float]:
+    """Return the tops of boxes spread evenly from `top` to `bottom`."""
+    gap = (bottom - top - sum(heights)) / (len(heights) - 1)
+    ys, y = [], top
+    for h in heights:
+        ys.append(y)
+        y += h + gap
+    return ys
 
 
 def panel_b(g: Svg, oy: float) -> float:
-    """Draw panel B, the web of which models run in which studies."""
+    """Draw panel B, each model's flow through its input to each study."""
     g.label(0, oy + 9, "B", "How the models are used")
     top = oy + 22
-    # Left: the models.
-    mw, mh, mgap = 156.0, 16.0, 7.0
-    ys = [top + k * (mh + mgap) for k in range(len(MODELS))]
-    bottom = ys[-1] + mh
-    # Right: the studies, spread over the same height.
-    sw_, sx = 120.0, WIDTH - 120.0
-    sgap = 14.0
-    sh = (bottom - top - 2 * sgap) / 3
-    sy = [top + k * (sh + sgap) for k in range(3)]
-    # Ports on each study's left edge, in the order of their models.
-    ins: dict[int, list[int]] = {s: [] for s in range(3)}
-    for i, (_, _, uses) in enumerate(MODELS):
-        for s, _, _ in uses:
-            ins[s].append(i)
-    port: dict[tuple[int, int], float] = {}
-    for s, models in ins.items():
-        n = len(models)
-        pad = 7.0
-        for k, i in enumerate(models):
-            port[(i, s)] = sy[s] + pad + k * (sh - 2 * pad) / (n - 1)
+    # Columns: models, inputs and studies.
+    mw = 132.0
+    iw, ix = 98.0, 192.0
+    sw_ = 108.0
+    sx = WIDTH - sw_
+    mgap = 6.0
+    mh = [m[3] for m in MODELS]
+    my = spread(mh, top, top + sum(mh) + mgap * (len(mh) - 1))
+    bottom = my[-1] + mh[-1]
+    ih = [10.0 + 9.0 * (1 + len(sub)) for _, sub in INPUTS]
+    iy = spread(ih, top + 4, bottom - 4)
+    # Study notes, one line per noted flow.
+    notes: dict[int, list[tuple[int, str]]] = {s: [] for s in range(3)}
+    for model, _, uses in FLOWS:
+        for s, note in uses:
+            if note:
+                notes[s].append((model, note))
+    sh = [
+        12.0 + 9.5 * (1 + bool(tag) + len(notes[s]))
+        for s, (_, tag) in enumerate(STUDIES)
+    ]
+    sy = spread(sh, top + 8, bottom - 8)
+    mc = [y + h / 2 for y, h in zip(my, mh, strict=True)]
+    ic = [y + h / 2 for y, h in zip(iy, ih, strict=True)]
+    sc = [y + h / 2 for y, h in zip(sy, sh, strict=True)]
+    # Ports: each edge's links stacked in order of the far end's height.
+    m_out: dict[int, list] = {i: [] for i in range(len(MODELS))}
+    i_in: dict[int, list] = {i: [] for i in range(3)}
+    i_out: dict[int, list] = {i: [] for i in range(3)}
+    s_in: dict[int, list] = {s: [] for s in range(3)}
+    for model, inp, uses in FLOWS:
+        w = flow_width(model, inp)
+        m_out[model].append(((ic[inp], inp), w, (model, inp)))
+        i_in[inp].append(((mc[model], model), w, (model, inp)))
+        for s, _ in uses:
+            i_out[inp].append(((sc[s], model), w, (model, inp, s)))
+            s_in[s].append(((ic[inp], model), w, (model, inp, s)))
+    pm: dict = {}
+    for i, links in m_out.items():
+        pm.update(stack(links, my[i], mh[i]))
+    pi_in: dict = {}
+    pi_out: dict = {}
+    for i in range(3):
+        pi_in.update(stack(i_in[i], iy[i], ih[i]))
+        pi_out.update(stack(i_out[i], iy[i], ih[i]))
+    ps: dict = {}
+    for s in range(3):
+        ps.update(stack(s_in[s], sy[s], sh[s]))
     # Links in each model's colour, the fine-tuned model's on top.
-    order = sorted(
-        range(len(MODELS)), key=lambda i: MODELS[i][0] == "Fine-tuned"
-    )
-    labels = []
-    stars = []
-    for i in order:
-        name, _, uses = MODELS[i]
-        main = name == "Fine-tuned"
-        y1 = ys[i] + mh / 2
-        for s, label, submitted in uses:
-            y2 = port[(i, s)]
+    order = sorted(FLOWS, key=lambda f: f[0] == FT)
+    for model, inp, uses in order:
+        colour = MODEL_COLOURS[model]
+        w = flow_width(model, inp)
+        link(g, mw, pm[(model, inp)], ix, pi_in[(model, inp)], colour, w)
+        for s, _ in uses:
             link(
                 g,
-                mw,
-                y1,
+                ix + iw,
+                pi_out[(model, inp, s)],
                 sx,
-                y2,
-                stroke=MODEL_COLOURS[name],
-                sw=1.2 if main else 0.9,
+                ps[(model, inp, s)],
+                colour,
+                w,
             )
-            if label:
-                labels.append((i, s, y1, y2, label))
-            if submitted:
-                stars.append((sx, y2))
-    for i, (name, glyph, _) in enumerate(MODELS):
-        node(g, 0, ys[i], mw, mh, name, glyph=glyph, main=name == "Fine-tuned")
-        g.rect(mw - 3, ys[i] + 2, 3, mh - 4, fill=MODEL_COLOURS[name], rx=1)
+    # Model nodes, with their colour stripe and a star if submitted.
+    for i, (name, sub, glyph, h) in enumerate(MODELS):
+        node(g, 0, my[i], mw, h, name, sub=sub, glyph=glyph, main=i == FT)
+        g.rect(mw - 3, my[i] + 2, 3, h - 4, fill=MODEL_COLOURS[i], rx=1)
+        if i in SUBMITTED:
+            star(g, mw - 10, my[i])
+    for i, (name, sub) in enumerate(INPUTS):
+        node(g, ix, iy[i], iw, ih[i], name, sub=sub)
     for s, (name, tag) in enumerate(STUDIES):
-        g.rect(sx, sy[s], sw_, sh, fill=PANEL, stroke=LINE, sw=0.6, rx=3)
-        cy = sy[s] + sh / 2
+        g.rect(sx, sy[s], sw_, sh[s], fill=PANEL, stroke=LINE, sw=0.6, rx=3)
+        y = sy[s] + 13
+        g.text(sx + 7, y, name, size=HEAD, weight="bold")
         if tag:
-            g.text(sx + 10, cy - 1, name, size=HEAD, weight="bold")
-            g.text(sx + 10, cy + 8.5, tag, size=SMALL, fill=MUTED)
-        else:
-            g.text(sx + 10, cy + 2.8, name, size=HEAD, weight="bold")
-    # Link labels inside each study, beside the link's port.
-    for _, _, _, y2, label in labels:
-        g.text(
-            sx + 5, y2 + 2.3, label, size=SMALL - 0.5, fill=MUTED, italic=True
-        )
-    for x, y in stars:
-        star(g, x, y)
+            y += 9.5
+            g.text(sx + 7, y, tag, size=SMALL, fill=MUTED)
+        for model, note in notes[s]:
+            y += 9.5
+            g.line(sx + 7, y - 2.4, sx + 15, y - 2.4, MODEL_COLOURS[model], 1.5)
+            g.text(sx + 18, y, note, size=SMALL, fill=MUTED, italic=True)
     # One legend line.
     y = bottom + 15
     x = 0.0
