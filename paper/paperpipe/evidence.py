@@ -17,6 +17,7 @@ and `None` in place of its numbers.
 - `renewal_table` and `renewal_numbers`: the renewal variants compared.
 - `realism_figure`: the simulated outbreaks against the data and
   published values.
+- `ablation_numbers`: how each ablation changed the German score.
 - `checkpoint_figure`: relative scores by checkpoint, the German panels of
   each run's progress figure (`paperpipe.progress`).
 """
@@ -41,6 +42,7 @@ from nowcasteval.labels import (
 )
 from nowcastfoundation.live_checkpoint import (
     LIVE_RUN,
+    MODELS,
     checkpoint_table,
     newest,
     summary_table,
@@ -51,10 +53,12 @@ from nowcastfoundation.live_checkpoint import label as checkpoint_label
 from paperpipe.outputs import to_markdown
 
 __all__ = [
+    "ABLATIONS",
     "BIAS_SUBSETS",
     "COMPARISONS",
     "EBOLA_EVIDENCE",
     "EVIDENCE",
+    "ablation_numbers",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
@@ -835,6 +839,54 @@ def coupling_numbers(rows: pd.DataFrame) -> dict:
     return out
 
 
+ABLATIONS: Final = ("nobiases", "sameplace", "parentchild", "nodelays")
+"""The ablation runs the paper quotes against the live run, by their name
+in the paper config's `comparisons`."""
+
+
+def ablation_numbers(
+    scores: pd.DataFrame | None,
+    run: str = LIVE_RUN,
+    pairs: Mapping[str, str] | None = None,
+) -> dict:
+    """Return how each ablation changed the German development score.
+
+    For each of `ABLATIONS` that `pairs` names, the change in the national
+    German relative WIS of its run against the live run's (`tidy`'s
+    `rel`), at the most simulations both have scored, as a signed
+    percentage, with those simulations as `<name>_simulations`. An
+    ablation with no shared checkpoint reads `NOT_YET`.
+    """
+    out: dict = {}
+    for name in ABLATIONS:
+        out[name] = NOT_YET
+        out[f"{name}_simulations"] = NOT_YET
+    if scores is None:
+        return out
+    rows = tidy(scores)
+    rows = rows.loc[
+        (rows["study"] == "germany")
+        & (rows["level"] == "national")
+        & (rows["outbreaks"] > 0)
+    ].dropna(subset=["rel"])
+    if "model" in rows:
+        rows = rows.loc[rows["model"] == MODELS[0]]
+    live = rows.loc[rows["run"] == run].groupby("outbreaks")["rel"].first()
+    for name in ABLATIONS:
+        other = (pairs or {}).get(name)
+        if other is None:
+            continue
+        mine = rows.loc[rows["run"] == other].groupby("outbreaks")["rel"]
+        mine = mine.first()
+        shared = sorted(set(live.index) & set(mine.index))
+        if not shared:
+            continue
+        n = shared[-1]
+        out[name] = _change(float(mine[n] / live[n]))
+        out[f"{name}_simulations"] = f"{int(n):,}"
+    return out
+
+
 RENEWAL_LABELS: Final = {
     "bvd": "With BVDOutbreakSize against without",
     "pooling": "Pooled against each zone alone",
@@ -1146,6 +1198,7 @@ def write_evidence(
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
+            "ablations": ablation_numbers(raw, run, pairs),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),

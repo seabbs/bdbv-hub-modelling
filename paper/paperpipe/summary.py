@@ -2,11 +2,12 @@
 
 `study_summary` reads each study's run notes and main-text score table and
 returns one entry per study: where its data came from, its baseline, the
-best model with its relative scores, and each of `QUOTED_MODELS` against
-`randomwalknowcast`. `write_summary` writes them as
-YAML under `results`, so `main.qmd` and `si.qmd` quote them with
-`{{< meta results.<study>.<field> >}}`. Where a study has a split, the
-numbers are from its held-out half.
+best model with its relative scores, each of `QUOTED_MODELS` against
+`randomwalknowcast`, each of `BASELINE_MODELS` against the study's
+baseline and each of `RANKED_MODELS`' rank by pairwise skill.
+`write_summary` writes them as YAML under `results`, so `main.qmd` and
+`si.qmd` quote them with `{{< meta results.<study>.<field> >}}`. Where a
+study has a split, the numbers are from its held-out half.
 """
 
 from __future__ import annotations
@@ -25,8 +26,11 @@ from paperpipe.meta import DUMMY_LABEL, baseline_of
 from paperpipe.outputs import REFERENCE
 
 __all__ = [
+    "BASELINE_MODELS",
     "QUOTED_MODELS",
+    "RANKED_MODELS",
     "finetuned_spec",
+    "pending_summary",
     "study_summary",
     "training_summary",
     "write_summary",
@@ -48,6 +52,16 @@ QUOTED_MODELS: tuple[str, ...] = (
     "foundation_baselinenowcast",
 )
 """Models whose scores against `randomwalknowcast` the text quotes."""
+
+BASELINE_MODELS: tuple[str, ...] = (*QUOTED_MODELS, REFERENCE)
+"""Models whose scores against the study's baseline the text quotes."""
+
+RANKED_MODELS: tuple[str, ...] = ("foundation", REFERENCE, "seabbs-renewal")
+"""Models whose rank by pairwise skill the text quotes: the fine-tuned
+model, the random walk nowcast and our renewal hub model."""
+
+PENDING = "pending"
+"""What a quoted number reads until it has scores."""
 
 
 def study_summary(
@@ -74,7 +88,10 @@ def study_summary(
         which says when the scored part has no scores yet and is empty
         otherwise, and `scope`, the part the numbers come from (`SCOPES`),
         and `models`, each of `QUOTED_MODELS` relative to
-        `randomwalknowcast`, or `pending` while it has no scores.
+        `randomwalknowcast`, or `pending` while it has no scores;
+        `vs_baseline`, each of `BASELINE_MODELS` relative to the study's
+        baseline; and `rank`, each of `RANKED_MODELS` by pairwise skill
+        (`_ranks`).
     """
     baseline = baseline_of(meta)
     dev, scored = SCOPES.get(meta["study"], ("", ""))
@@ -111,6 +128,8 @@ def study_summary(
         ),
         "scope": scope,
         "models": _against_reference(scores, baseline),
+        "vs_baseline": _quoted(scores, "rel_score", BASELINE_MODELS),
+        "rank": _ranks(scores),
         "status": (
             ""
             if len(scores)
@@ -133,6 +152,70 @@ def _against_reference(
     return {
         m: round(float(rel[m]), 2) if m in rel.index else "pending"
         for m in QUOTED_MODELS
+    }
+
+
+def _key(model: str) -> str:
+    """Return a model's metadata key: its name with `_` for `-`."""
+    return model.replace("-", "_")
+
+
+def _quoted(
+    scores: pd.DataFrame, col: str, models: Sequence[str]
+) -> dict[str, float | str]:
+    """Return each model's `col` to two decimals, `PENDING` without one."""
+    rel = (
+        scores.set_index("model")[col].dropna()
+        if col in scores.columns
+        else pd.Series(dtype=float)
+    )
+    return {
+        _key(m): round(float(rel[m]), 2) if m in rel.index else PENDING
+        for m in models
+    }
+
+
+def _ranks(scores: pd.DataFrame) -> dict[str, int | str]:
+    """Return each of `RANKED_MODELS`' rank by pairwise skill, and `n`.
+
+    Models are ranked by `pair_score`, the pairwise relative skill on the
+    natural scale, lowest first, among every model of the table that has
+    one; `n` is how many have one.
+    """
+    skill = (
+        scores.set_index("model")["pair_score"].dropna()
+        if "pair_score" in scores.columns
+        else pd.Series(dtype=float)
+    )
+    rank = skill.rank(method="min").astype(int)
+    return {
+        "n": len(skill),
+        **{
+            _key(m): int(rank[m]) if m in rank.index else PENDING
+            for m in RANKED_MODELS
+        },
+    }
+
+
+def pending_summary() -> dict:
+    """Return the entry of a study a run leaves out: hidden and pending.
+
+    The paper quotes some of a held-out study's numbers outside the
+    sections it hides, so each reads `PENDING` until the paper run.
+    """
+    return {
+        "shown": False,
+        "label": "",
+        "note": "",
+        "status": "",
+        "scope": PENDING,
+        "baseline": PENDING,
+        "models": dict.fromkeys(QUOTED_MODELS, PENDING),
+        "vs_baseline": dict.fromkeys(map(_key, BASELINE_MODELS), PENDING),
+        "rank": {
+            "n": PENDING,
+            **dict.fromkeys(map(_key, RANKED_MODELS), PENDING),
+        },
     }
 
 
@@ -190,8 +273,14 @@ def write_summary(
     on, quoted by the SI.
     `finetuned` is the fine-tuned checkpoint the `_ft` models loaded, or
     `pending` while the final run has published none.
+    A study of `SCOPES` with no entry, as the held-out Ebola study in a
+    development run, gets `pending_summary`.
     """
     pin = finetuned or "pending"
+    studies = {
+        **{s: pending_summary() for s in SCOPES if s not in studies},
+        **studies,
+    }
     doc = {
         "results": {
             "mode": mode,

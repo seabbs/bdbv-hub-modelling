@@ -983,7 +983,7 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 - Active zones have forecasts from both the active and the by-province blocks.
 - We compare their scores pairwise on the same zones and weeks, as WIS on natural and log scales by horizon.
 - This shows what the active block adds for a zone over its province's block.
-- The hub model `seabbs-renewal` (Renewal model) scored [X] against the other hub submissions, and submitted `renewalbvd` in [X] of [X] rounds.
+- The hub model `seabbs-renewal` (Renewal model) ranked {{< meta results.ebola.rank.seabbs_renewal >}} of {{< meta results.ebola.rank.n >}} models by pairwise relative skill, and submitted `renewalbvd` in [X] of [X] rounds.
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}

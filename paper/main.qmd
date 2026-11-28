@@ -462,8 +462,8 @@ The fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the random
 German nowcast hub. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to the hub's baseline on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon, the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-On the {{< meta results.germany.scope >}}, the fine-tuned model scored {{< meta results.germany.models.foundation >}} relative to the hub's baseline, against {{< meta results.germany.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.germany.models.foundation_zeroshot_complete >}} on complete data and [X] for the random walk nowcast.
-It [outperformed / performed comparably to] the hub's models, ranking [X] of [X].
+On the {{< meta results.germany.scope >}}, the fine-tuned model scored {{< meta results.germany.vs_baseline.foundation >}} relative to the hub's baseline, against {{< meta results.germany.vs_baseline.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.germany.vs_baseline.foundation_zeroshot_complete >}} on complete data and {{< meta results.germany.vs_baseline.randomwalknowcast >}} for the random walk nowcast.
+It [outperformed / performed comparably to] the hub's models, ranking {{< meta results.germany.rank.foundation >}} of {{< meta results.germany.rank.n >}} by pairwise relative skill.
 
 ### Ebola forecasting hub
 
@@ -485,7 +485,7 @@ It [outperformed / performed comparably to] the hub's models, ranking [X] of [X]
 Ebola forecasting hub: forecasts of every hub round, each from the last release before the round closed, with the fine-tuned model's first submission marked. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, as stacked dispersion, overprediction and underprediction, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon, the hub's own horizons only. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
-{{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the fine-tuned model scored {{< meta results.ebola.models.foundation >}} relative to the hub's baseline, against {{< meta results.ebola.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.ebola.models.foundation_zeroshot_complete >}} on complete data and [X] for the random walk nowcast.
+{{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the fine-tuned model scored {{< meta results.ebola.vs_baseline.foundation >}} relative to the hub's baseline, against {{< meta results.ebola.vs_baseline.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.ebola.vs_baseline.foundation_zeroshot_complete >}} on complete data and {{< meta results.ebola.vs_baseline.randomwalknowcast >}} for the random walk nowcast.
 It [outperformed / performed comparably to] the other hub submissions and our renewal model, [before and after its first submission].
 
 :::::
@@ -501,7 +501,7 @@ On the Ebola {{< meta results.ebola.scope >}}, zero-shot and fine-tuned Chronos-
 
 Fine-tuning on real data instead of simulations changed the German held-out score by [X] and the Ebola score after {{< meta results.realdata_after >}} by [X] (Supporting Information, *Real-data fine-tune against synthetic*).
 
-Against the fine-tuned model, the German development score at the final checkpoint changed by [X] with no attention biases, [X] with the same-place bias only, [X] with the parent and child biases only and [X] without delay information (Supporting Information, *Attention bias setups*; *Delays against no delays*).
+Against the fine-tuned model, the German development score at the final checkpoint changed by {{< meta evidence.ablations.nobiases >}} with no attention biases, {{< meta evidence.ablations.sameplace >}} with the same-place bias only, {{< meta evidence.ablations.parentchild >}} with the parent and child biases only and {{< meta evidence.ablations.nodelays >}} without delay information (Supporting Information, *Attention bias setups*; *Delays against no delays*).
 
 On the Ebola hub, the median rolling $\rho_p$ between provinces was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for the random walk nowcast, and pairing changed its national CRPS by {{< meta evidence.pairing.randomwalknowcast.national_crps >}} against no pairing (Supporting Information, *Impact of correlated trajectories*).
 Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score on log counts by {{< meta evidence.coupling.independent >}} and {{< meta evidence.coupling.comonotone >}} against its copula (Supporting Information, *Correlated trajectories*).
@@ -519,15 +519,15 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
 - **Summary.**
   - We aimed to combine the forecasting of a foundation time series model with the delay handling of nowcasting methods, without specialist configuration.
   - Fine-tuned on simulations alone, Chronos-2 [beat / matched / fell short of] this aim.
-  - On held-out simulations it scored [X] relative to the random walk nowcast, against [X] for zero-shot Chronos-2 on the reporting triangle and [X] on complete data.
-  - On the German nowcast hub it scored [X] relative to the hub's baseline, ranking [X] of [X] models.
+  - On held-out simulations it scored {{< meta results.synthetic.models.foundation >}} relative to the random walk nowcast, against {{< meta results.synthetic.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle and {{< meta results.synthetic.models.foundation_zeroshot_complete >}} on complete data.
+  - On the German nowcast hub it scored {{< meta results.germany.vs_baseline.foundation >}} relative to the hub's baseline, ranking {{< meta results.germany.rank.foundation >}} of {{< meta results.germany.rank.n >}} models.
   - On the Ebola hub it scored [X] from its first submission, prospectively, ranking [X] of [X] submissions.
   - Fine-tuning on real data instead scored [X] against fine-tuning on simulations (Supporting Information, *Real-data fine-tune against synthetic*).
-  - Scores changed by [X] with no attention biases, [X] with the same-place bias only, [X] with the parent and child biases only and [X] without delay information (Supporting Information, *Attention bias setups*; *Delays against no delays*).
-  - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (Supporting Information, *Daily nowcasts*).
+  - Scores changed by {{< meta evidence.ablations.nobiases >}} with no attention biases, {{< meta evidence.ablations.sameplace >}} with the same-place bias only, {{< meta evidence.ablations.parentchild >}} with the parent and child biases only and {{< meta evidence.ablations.nodelays >}} without delay information (Supporting Information, *Attention bias setups*; *Delays against no delays*).
+  - Given a baseline nowcast as complete counts, the fine-tuned model scored {{< meta results.synthetic.models.foundation_baselinenowcast >}}, {{< meta results.germany.models.foundation_baselinenowcast >}} and {{< meta results.ebola.models.foundation_baselinenowcast >}} relative to the random walk nowcast on held-out simulations, the German hub and the Ebola hub (Supporting Information, *Daily nowcasts*).
   - Correlated trajectories changed the random walk nowcast's national CRPS by {{< meta evidence.pairing.randomwalknowcast.national_crps >}} (Supporting Information, *Impact of correlated trajectories*).
-  - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions [@Johnson2025] (Supporting Information, *Baselines*).
-  - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, scored [X] against the other Ebola hub submissions [@BVDOutbreakSize; @lison2024] (Supporting Information, *Renewal model*).
+  - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, ranked {{< meta results.ebola.rank.randomwalknowcast >}} of {{< meta results.ebola.rank.n >}} models on the Ebola hub [@Johnson2025] (Supporting Information, *Baselines*).
+  - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, ranked {{< meta results.ebola.rank.seabbs_renewal >}} of {{< meta results.ebola.rank.n >}} models on the Ebola hub [@BVDOutbreakSize; @lison2024] (Supporting Information, *Renewal model*).
     Stabilising with BVDOutbreakSize changed national scores by {{< meta evidence.renewal.bvd.national_change >}}, and pooling and transmission between places by {{< meta evidence.renewal.pooling.national_change >}} (Supporting Information, *Renewal model variants*).
 - **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
@@ -535,7 +535,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We did not compare with epinowcast directly, or, for the synthetic study, with the model that generated the data.
     However, the German case study includes the hub's epinowcast-based model [@Wolffram2023].
   - We ported the epinowcast model to PyRenew rather than using it directly.
-    However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (Supporting Information, *Renewal model*).
+    However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they ranked {{< meta results.ebola.rank.seabbs_renewal >}} of {{< meta results.ebola.rank.n >}} models (Supporting Information, *Renewal model*).
   - We did not compare directly with Mantis or other custom neural networks trained for this task [@Dudley2026].
     The ACCIDDA-Chromantis hub submission is one such model, a negative binomial nowcast followed by neural networks trained on past Ebola outbreaks, and we compare with it only through its Ebola hub forecasts [@bdbv_accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
