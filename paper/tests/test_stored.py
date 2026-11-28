@@ -31,8 +31,6 @@ def test_each_set_names_its_files_from_the_config() -> None:
     sets = stored.sets(CONFIG, "paper/results")
     assert set(sets) == {"synthetic", "finetune", "simulations", "germany"}
     assert set(sets["germany"]) == {
-        "pairing-germany.csv.gz",
-        "pairing-germany-rho.csv.gz",
         "germany-forecasts.csv.gz",
         "germany-units.csv.gz",
         "germany-units.json",
@@ -53,9 +51,8 @@ def test_each_set_names_its_files_from_the_config() -> None:
         sets["synthetic"]["synthetic-dev.csv.gz"]
         == (CONFIG["synthetic"]["forecasts"]["development"])
     )
-    assert sets["synthetic"]["pairing-synthetic.csv.gz"].endswith(
-        "evidence/pairing/pairing-synthetic.csv.gz"
-    )
+    # The copula analyses are the Ebola hub's, never a stored input.
+    assert not [n for files in sets.values() for n in files if "pairing" in n]
     runs = dict.fromkeys([CONFIG["live_run"], *CONFIG["comparisons"].values()])
     assert set(sets["finetune"]) == {
         "comparison.csv",
@@ -292,22 +289,19 @@ def test_stored_outputs_stand_in_for_the_host_rules() -> None:
         "sim_diseases": "s/sim-diseases.csv",
         "sim_summaries": "s/sim-summaries.csv",
         "sim_realism": "s/sim-realism.csv",
-        "pairing_synthetic": "s/pairing-synthetic.csv.gz",
         "examples": "s/examples",
     }
     flow = PaperFlow(config, {}, "2026-08-01")
     files = flow.workflow_evidence()
     assert files["sim_diseases"] == "s/sim-diseases.csv"
     assert files["sim_realism"] == "s/sim-realism.csv"
-    assert "si_copula" in files
-    assert flow.pairing_synthetic_file() == "s/pairing-synthetic.csv.gz"
     examples = flow.example_files()
     assert examples["counts"]
     assert all(f.startswith("s/examples/") for f in examples["counts"])
 
 
 def test_every_row_of_the_german_set_is_german(tmp_path: Path) -> None:
-    # The pairing tables have no `study` column; their dates are German.
+    # A German table with no `study` column is held out by its dates.
     path = _write(
         tmp_path / "rho.csv", pd.DataFrame({"nowcast_date": ["2022-03-01"]})
     )
@@ -317,34 +311,6 @@ def test_every_row_of_the_german_set_is_german(tmp_path: Path) -> None:
         tmp_path / "ok.csv", pd.DataFrame({"nowcast_date": ["2022-01-01"]})
     )
     stored.check_development({"x.csv": ok}, CONFIG, german=True)
-
-
-def test_the_stored_german_pairing_stands_in(tmp_path: Path) -> None:
-    folder = tmp_path / "germany"
-    folder.mkdir()
-    for name in ("pairing-germany.csv.gz", "pairing-germany-rho.csv.gz"):
-        (folder / name).write_text("")
-    overlay = stored.overlay({"germany": folder})
-    assert overlay["stored"]["pairing_germany"].endswith(
-        "pairing-germany.csv.gz"
-    )
-    assert overlay["stored"]["copula_rho"].endswith("rho.csv.gz")
-    config = copy.deepcopy(CONFIG)
-    config["host_outputs"] = False
-    config["synthetic"]["simulations"]["development"] = None
-    config["stored"] = {
-        **overlay["stored"],
-        "pairing_synthetic": "s/pairing-synthetic.csv.gz",
-    }
-    flow = PaperFlow(config, {}, "2026-08-01")
-    files = flow.workflow_evidence()
-    assert files["copula_rho"] == overlay["stored"]["copula_rho"]
-    assert "si_copula" in files
-    assert flow.pairing_germany_file() == overlay["stored"]["pairing_germany"]
-    # Without a stored copy Pages leaves the German pairing pending.
-    config["stored"] = {}
-    files = PaperFlow(config, {}, "2026-08-01").workflow_evidence()
-    assert "copula_rho" not in files
 
 
 def test_the_stored_german_forecasts_stand_in_on_pages(tmp_path: Path) -> None:

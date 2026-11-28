@@ -457,9 +457,6 @@ def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
         "train_segment",
         "evaluate_checkpoint",
         "synthetic_forecasts_development",
-        "pairing_synthetic",
-        "pairing_germany",
-        "si_copula",
         "sim_realism",
     ):
         assert f"rule {rule}:" not in log
@@ -476,18 +473,8 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
         "synthetic": {
             "forecasts": {"development": str(store / "synthetic-dev.csv.gz")}
         },
-        "stored": {
-            "pairing_synthetic": str(store / "pairing.csv.gz"),
-            "pairing_germany": str(store / "pairing-germany.csv.gz"),
-            "copula_rho": str(store / "rho.csv.gz"),
-        },
     }
-    for name in (
-        "synthetic-dev.csv.gz",
-        "pairing.csv.gz",
-        "pairing-germany.csv.gz",
-        "rho.csv.gz",
-    ):
+    for name in ("synthetic-dev.csv.gz",):
         (store / name).write_text("")
     (tmp_path / "germany-results").mkdir()
     (tmp_path / "germany-results" / "paper-forecasts.csv.gz").write_text("")
@@ -522,12 +509,9 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
     )
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
-    assert "rule si_copula:" in log
     for rule in (
         "simulate_batch",
         "synthetic_forecasts_development",
-        "pairing_synthetic",
-        "pairing_germany",
         "train_segment",
     ):
         assert f"rule {rule}:" not in log

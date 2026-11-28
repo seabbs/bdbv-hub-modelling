@@ -426,45 +426,20 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
     args = flow.options(files)
     assert f"--sim-diseases {files['sim_diseases']}" in args
     assert _flow(final_run=None).workflow_evidence().keys() == {
-        "si_copula",
-        "copula_rho",
         "sim_diseases",
         "sim_summaries",
         "sim_realism",
     }
 
 
-def test_with_no_development_simulations_the_copula_scores_pend(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    germany = tmp_path / "germany.toml"
-    split = CONFIG["heldout"]["germany_from"]
-    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
-    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
-    (
-        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
-    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
-    config = copy.deepcopy(CONFIG)
-    config["germany"]["config"] = str(germany)
-    config["synthetic"]["simulations"]["development"] = None
-    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
-    flow = PaperFlow.load(
-        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
-    )
-    assert flow.synthetic["simulations"]["development"] is None
-    files = flow.workflow_evidence()
-    # The German rho_p needs no simulation; the walks' scores do.
-    assert "copula_rho" in files
-    assert "si_copula" not in files
-
-
-def test_the_copula_evidence_reads_real_german_data_only() -> None:
-    files = _flow().workflow_evidence()
-    assert files["si_copula"].endswith("evidence/si-copula.csv")
-    assert files["copula_rho"].endswith("pairing-germany-rho.csv.gz")
-    dummy = _flow(germany__real=False).workflow_evidence()
-    assert "si_copula" not in dummy
-    assert "copula_rho" not in dummy
+def test_the_copula_evidence_is_the_ebola_hub_s_in_a_paper_run_only() -> None:
+    flow = _flow()
+    assert flow.ebola_evidence("development") == {}
+    files = flow.ebola_evidence("paper")
+    assert files["si_copula"].endswith("paper/evidence/si-copula.csv")
+    assert files["copula_rho"].endswith("pairing/pairing-bdbv-rho.csv.gz")
+    assert "si_copula" not in flow.workflow_evidence()
+    assert "copula_rho" not in flow.workflow_evidence()
 
 
 def test_the_simulations_and_their_ready_file_are_always_inputs(
