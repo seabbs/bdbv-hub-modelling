@@ -1,7 +1,7 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Fine-tune Chronos-2 on real data alone, for `foundation_real`.
 
-The workflow's `realonly` run (workflow/config.yaml `runs`, `data:
+The workflow's `realdata` run (workflow/config.yaml `runs`, `data:
 real`). It trains a LoRA adapter from base Chronos-2 on the German and
 BDBV real-data blocks (`nowcastgermany.finetune_blocks --realdata`,
 `nowcastbdbv.finetune_blocks`) with the simulation fine-tune's recipe

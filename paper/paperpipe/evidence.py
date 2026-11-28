@@ -132,15 +132,9 @@ COMPARISONS: Final = {
         "the full and no-delay runs' scores by checkpoint",
         ("with delays", "without delays"),
     ),
-    # The workflow's `realdata` run: German blocks mixed into Run A's
-    # simulations.
+    # The workflow's `realdata` run: real data alone (`foundation_real`).
     "realdata": (
         "the real-data and synthetic fine-tunes' scores",
-        ("synthetic", "synthetic and German"),
-    ),
-    # The workflow's `realonly` run: real data alone (`foundation_real`).
-    "realonly": (
-        "the real-only and synthetic fine-tunes' scores",
         ("synthetic", "real data alone"),
     ),
 }
@@ -890,7 +884,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("slots", "delays", "realdata", "realonly", "daily"):
+    for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

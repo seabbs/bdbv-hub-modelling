@@ -38,8 +38,8 @@ active_zone_recent_weeks = 4
 # development half and the public BDBV data up to the release below
 # (`[realdata_germany]`, `[realdata_bdbv]`), that the SI-only
 # `foundation_real` model loads: the settings hash of the release
-# `realdata-ft-<hash>`, which the workflow's `realonly` run publishes
-# (`task workflow:finetune-realonly`). Empty until that release is
+# `realdata-ft-<hash>`, which the workflow's `realdata` run publishes
+# (`task workflow:finetune-realdata`). Empty until that release is
 # published.
 realdata = ""
 

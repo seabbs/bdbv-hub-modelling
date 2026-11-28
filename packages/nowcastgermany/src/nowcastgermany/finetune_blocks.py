@@ -1,22 +1,22 @@
 """German real-data training blocks, for the real-data runs.
 
-Two runs read them (workflow/config.yaml `runs`):
+Two kinds of run read them (workflow/config.yaml `runs`):
 
-- `realdata` mixes them into Run A's simulations: the German hub triangle
-  cut into training blocks as the German tasks lay it out, from reports
-  before the first scored German date only (`window`). Run as `python -m
-  nowcastgermany.finetune_blocks TRIANGLE OUT --first-date D
-  --truth-delay N`, the window's two settings from
-  `packages/nowcastgermany/config/germany.toml` (rule
-  real_training_blocks).
-- `realonly` trains on real data alone (`foundation_real`): each nowcast
+- A run with `real_training: germany` mixes them into Run A's
+  simulations: the German hub triangle cut into training blocks as the
+  German tasks lay it out, from reports before the first scored German
+  date only (`window`). Run as `python -m nowcastgermany.finetune_blocks
+  TRIANGLE OUT --first-date D --truth-delay N`, the window's two settings
+  from `packages/nowcastgermany/config/germany.toml` (rule
+  real_training_blocks). No committed run does.
+- `realdata` trains on real data alone (`foundation_real`): each nowcast
   date's German tasks, as the benchmark builds them
   (`data.nowcast_tasks`), laid out as the fine-tuned model forecasts them
   (`finetune.realtasks`), from the data as available on the last day of
   the development half (`realdata_window`, the table `[realdata_germany]`
   of packages/nowcastfoundation/config/finetune.toml). Run as `python -m
   nowcastgermany.finetune_blocks TRIANGLE OUT --realdata` (rule
-  realonly_blocks_germany).
+  realdata_blocks_germany).
 """
 
 from __future__ import annotations

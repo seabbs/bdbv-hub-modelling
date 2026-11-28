@@ -163,21 +163,18 @@ runs:
   # Run A on complete counts, without lag series (the paper's delays
   # comparison).
   nodelays: {layout: complete}
-  # Run A with the German real-data blocks mixed in: simulations and
-  # German data (the paper's `realdata` comparison). Not the real-only
-  # run below.
-  realdata: {real_training: germany}
   # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
   # "Fine-tuning on real data"): Run A's recipe, layout and attention
   # biases on the German development half and the BDBV releases. It
   # trains in passes to Run A's steps (its final checkpoint's 82,040,
   # chronos-slots-66a7a630d729), at most 20 passes, with checkpoints at
   # 1/8, 1/4, 1/2 and all of them; the final one is reported, with no
-  # choice on real data. Its final checkpoint is released as realdata-ft-<hash>, which `realdata` in
+  # choice on real data. Its final checkpoint is released as
+  # realdata-ft-<hash>, which `realdata` in
   # packages/nowcastfoundation/config/finetune.toml pins. One target
-  # cuts, trains, scores and publishes it: `task workflow:finetune-realonly`
-  # (rule finetune_realonly). The paper's `realonly` comparison.
-  realonly:
+  # cuts, trains, scores and publishes it: `task workflow:finetune-realdata`
+  # (rule finetune_realdata). The paper's `realdata` comparison.
+  realdata:
     data: real
     prefixes: [125, 250, 500, 1000]
     target_steps: 82040
@@ -275,8 +272,7 @@ dashboard:
   run_names:
     noslots: {variant: no attention bias}
     nodelays: {paper_model: foundation_complete}
-    realdata: {variant: synthetic and German data}
-    realonly: {paper_model: foundation_real}
+    realdata: {paper_model: foundation_real}
     runb: {variant: release layer}
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]

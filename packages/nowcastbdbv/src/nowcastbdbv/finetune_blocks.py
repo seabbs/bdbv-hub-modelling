@@ -15,7 +15,7 @@ delay old and no target the SI scores the model on is trained on.
     python -m nowcastbdbv.finetune_blocks DATA OUT
 
 DATA is the hub's tidy data (`bdbvhub data`). The workflow's rule
-realonly_blocks_bdbv runs it.
+realdata_blocks_bdbv runs it.
 """
 
 from __future__ import annotations

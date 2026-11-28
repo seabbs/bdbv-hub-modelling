@@ -64,7 +64,7 @@ def real_model(block_limit: int = BLOCK_LIMIT) -> FoundationModel:
     """
     cases, weeks, recent = active_zone_rule(ft.ROOT / FINETUNED_CONFIG)
     return FoundationModel(
-        "realonly",
+        "realdata",
         FROM_DATA,
         "ragged",
         block_limit=block_limit,
