@@ -872,12 +872,6 @@ Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workf
 Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
-::: {#tbl-synthetic-joint}
-{{< include build/tables/main/synthetic-joint.md >}}
-
-Held-out synthetic data: mean energy score of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
-
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}
 

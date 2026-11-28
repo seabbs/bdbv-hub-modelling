@@ -112,8 +112,8 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
         assert list((development / "figures" / "si").glob(f"{study}-*.png"))
         assert list((development / "tables" / "si").glob(f"{study}-*.csv"))
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
-    joint = development / "tables" / "main" / "synthetic-joint.md"
-    assert "rel_energy_log" in joint.read_text()
+    # Trajectories are scored jointly for the Ebola hub only.
+    assert not (development / "tables" / "main" / "synthetic-joint.md").exists()
     design = development / "tables" / "si" / "grid.md"
     assert "Infections" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()

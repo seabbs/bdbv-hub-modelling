@@ -104,8 +104,9 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 }
 """Figure names of each study, for the main text and the SI."""
 
-JOINT_STUDIES: Final = ("synthetic", "ebola")
-"""Studies scored on sample trajectories, so also scored jointly."""
+JOINT_STUDIES: Final = ("ebola",)
+"""Studies whose sample trajectories are also scored jointly: the Ebola
+hub, whose submissions are trajectories."""
 
 MAIN_TABLES: Final = ("scores",)
 """Main-text tables of every study; the synthetic study adds `grid`."""
