@@ -14,6 +14,7 @@ Steps, in workflow order:
 - `progress`: a fine-tuning run's progress figure, from its own tables;
 - `realism`: the grid's simulations against the German development half;
 - `pairing`: the walks' scores with and without pairing, summarised;
+- `coupling`: Chronos-2's Ebola trajectories under each coupling;
 - `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -258,6 +259,20 @@ def _pairing(a: argparse.Namespace) -> None:
     summarise_pairing(rows).to_csv(a.out, index=False)
 
 
+def _coupling(a: argparse.Namespace) -> None:
+    from paperpipe.coupling import coupling_rows, ebola_coupling
+
+    rows = coupling_rows(
+        _read(a.forecasts),
+        _read(a.truth),
+        _read(a.observations),
+        _delays(_read(a.locations)),
+    )
+    scores, summary = ebola_coupling(rows, n_samples=a.samples)
+    _write(scores, a.out_scores)
+    _write(summary, a.out)
+
+
 def _ebola_extra(a: argparse.Namespace) -> None:
     raw = pd.read_csv(a.input)
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
@@ -456,6 +471,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("scores", type=Path, nargs="+")
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_pairing)
+
+    p = sub.add_parser("coupling")
+    p.add_argument("--forecasts", type=Path, required=True)
+    p.add_argument("--truth", type=Path, required=True)
+    p.add_argument("--observations", type=Path, required=True)
+    p.add_argument("--locations", type=Path, required=True)
+    p.add_argument("--samples", type=int, default=200)
+    p.add_argument("--out-scores", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_coupling)
 
     p = sub.add_parser("ebola-extra")
     p.add_argument("--input", type=Path, required=True)

@@ -699,6 +699,33 @@ rule pairing_ebola:
         "--out {output.summary}"
 
 
+# Chronos-2's Ebola trajectories scored with its copula, with independent
+# cells and comonotone (`paperpipe.coupling`), a paper run's only.
+rule coupling_ebola:
+    input:
+        forecasts=f"{R}/paper/forecasts/ebola.csv.gz",
+        truth=f"{R}/paper/truth/ebola.csv.gz",
+        observations=f"{R}/paper/data/ebola-observations.csv.gz",
+        locations=f"{R}/paper/data/ebola-locations.csv",
+    output:
+        scores=f"{R}/paper/evidence/coupling-scores.csv.gz",
+        summary=FLOW.ebola_files()["coupling"],
+    log:
+        f"{R}/logs/coupling_ebola.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe coupling --forecasts {input.forecasts} "
+        "--truth {input.truth} --observations {input.observations} "
+        "--locations {input.locations} --out-scores {output.scores} "
+        "--out {output.summary}"
+
+
 # The grid's training rounds against the German development half, for
 # the SI's realism figure and numbers (`paperpipe realism`).
 if FLOW.rounds_dir:

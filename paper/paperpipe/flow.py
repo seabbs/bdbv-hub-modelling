@@ -286,12 +286,14 @@ class PaperFlow:
         """Return the paper run's Ebola analyses, by evidence name.
 
         The walks' pairing scores, summarised, and their rolling rho_p on
-        the Ebola release backtest (rule pairing_ebola).
+        the Ebola release backtest (rule pairing_ebola), and Chronos-2's
+        trajectories under each coupling (rule coupling_ebola).
         """
         evidence = f"{self.results}/paper/evidence"
         return {
             "si_copula": f"{evidence}/si-copula.csv",
             "copula_rho": f"{evidence}/pairing/pairing-bdbv-rho.csv.gz",
+            "coupling": f"{evidence}/coupling.csv",
         }
 
     def ebola_evidence(self, mode: str) -> dict[str, str]:

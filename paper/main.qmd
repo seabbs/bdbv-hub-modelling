@@ -504,7 +504,7 @@ Fine-tuning on real data instead of simulations changed the German held-out scor
 Against the fine-tuned model, the German development score at the final checkpoint changed by [X] with no attention biases, [X] with the same-place bias only, [X] with the parent and child biases only and [X] without delay information (Supporting Information, *Attention bias setups*; *Delays against no delays*).
 
 On the Ebola hub, the median rolling $\rho_p$ between provinces was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for the random walk nowcast, and pairing changed its national CRPS by {{< meta evidence.pairing.randomwalknowcast.national_crps >}} against no pairing (Supporting Information, *Impact of correlated trajectories*).
-Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).
+Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score on log counts by {{< meta evidence.coupling.independent >}} and {{< meta evidence.coupling.comonotone >}} against its copula (Supporting Information, *Correlated trajectories*).
 
 The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
 

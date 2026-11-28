@@ -12,6 +12,8 @@ and `None` in place of its numbers.
   hub, by level.
 - `rho_medians`: the median rolling rho_p of each walk model.
 - `pairing_numbers`: how the rolling copula changed the walks' scores.
+- `coupling_table` and `coupling_numbers`: Chronos-2's Ebola
+  trajectories under each coupling, against its copula.
 - `realism_figure`: the simulated outbreaks against the data and
   published values.
 - `checkpoint_figure`: relative scores by checkpoint, the German panels of
@@ -59,6 +61,8 @@ __all__ = [
     "comparison_figure",
     "comparison_rows",
     "copula_figure",
+    "coupling_numbers",
+    "coupling_table",
     "diseases_table",
     "drop_bdbv",
     "live_numbers",
@@ -644,6 +648,7 @@ case study and level), `run`, `outbreaks` (the run's checkpoint) and
 EBOLA_EVIDENCE: Final = {
     "si_copula": "the walks' Ebola scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' Ebola rho_p by origin",
+    "coupling": "Chronos-2's Ebola trajectories scored under each coupling",
 }
 """Each Ebola input and what it waits on until set: the paper run's own
 analyses of the held-out Ebola study (rules pairing_ebola and the
@@ -666,6 +671,7 @@ QUOTED: Final = {
         m: {"national_crps": NOT_YET, "provinces_energy": NOT_YET}
         for m in COPULA_MODELS
     },
+    "coupling": {"independent": NOT_YET, "comonotone": NOT_YET},
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
@@ -744,6 +750,76 @@ def pairing_numbers(rows: pd.DataFrame) -> dict:
             ].set_index("variant")["value"]
             if {"off", "rolling"} <= set(one.index):
                 node[key] = _change(float(one["rolling"] / one["off"]))
+    return out
+
+
+COUPLING_LABELS: Final = {
+    "gaussian": "Gaussian copula",
+    "independent": "Independent",
+    "comonotone": "Comonotone",
+}
+"""The couplings of Chronos-2's Ebola trajectories, the copula first."""
+
+COUPLING_SCORES: Final = {
+    "energy": "ES",
+    "log_energy": "ES (log)",
+    "sum_crps": "CRPS of nowcast sums",
+}
+"""The coupling table's scores (`nowcasteval.coupling.summary`)."""
+
+COUPLING_MODEL: Final = "foundation"
+"""The model whose coupling the paper quotes: the one the hub was sent."""
+
+
+def coupling_table(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return each coupling's scores relative to the copula, by model.
+
+    `rows` are `nowcasteval.coupling.summary`'s against `gaussian`: each
+    cell is the ratio of means with its 90% bootstrap interval over
+    origins.
+    """
+    rows = rows.loc[
+        rows["coupling"].isin(list(COUPLING_LABELS))
+        & rows["score"].isin(list(COUPLING_SCORES))
+    ]
+    order = list(COUPLING_LABELS)
+    out = []
+    for (model, coupling), g in rows.groupby(["model", "coupling"]):
+        cells = {
+            r.score: f"{r.ratio:.3f} [{r.lower:.3f}, {r.upper:.3f}]"
+            for r in g.itertuples()
+        }
+        out.append(
+            {
+                "model": model,
+                "_order": order.index(str(coupling)),
+                "Coupling": COUPLING_LABELS[str(coupling)],
+                **{
+                    name: cells[s]
+                    for s, name in COUPLING_SCORES.items()
+                    if s in cells
+                },
+                "Origins": int(g["n_origins"].max()),
+            }
+        )
+    table = pd.DataFrame(out).sort_values(["model", "_order"])
+    return table.drop(columns="_order").reset_index(drop=True)
+
+
+def coupling_numbers(rows: pd.DataFrame) -> dict:
+    """Return how each bound changed the quoted model's energy score.
+
+    The change in the energy score on log counts of independent cells
+    and of comonotone trajectories against the copula, as signed
+    percentages (`QUOTED`'s while the model has no rows).
+    """
+    out = dict(QUOTED["coupling"])
+    one = rows.loc[
+        (rows["model"] == COUPLING_MODEL) & (rows["score"] == "log_energy")
+    ].set_index("coupling")["ratio"]
+    for coupling in out:
+        if coupling in one.index:
+            out[coupling] = _change(float(one[coupling]))
     return out
 
 
@@ -951,6 +1027,12 @@ def write_evidence(
         None if cop is None else copula_figure(cop),
         ["si_copula"],
     )
+    coupling = data["coupling"]
+    table(
+        "coupling",
+        None if coupling is None else coupling_table(coupling),
+        ["coupling"],
+    )
     dis = data["sim_diseases"]
     table(
         "sim-diseases",
@@ -999,6 +1081,11 @@ def write_evidence(
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
             "pairing": (
                 QUOTED["pairing"] if cop is None else pairing_numbers(cop)
+            ),
+            "coupling": (
+                QUOTED["coupling"]
+                if coupling is None
+                else coupling_numbers(coupling)
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
