@@ -43,3 +43,7 @@ def test_no_figure_needs_checkpoint_forecasts_of_the_synthetic_study() -> None:
     # The synthetic runner forecasts the final checkpoint only, so no
     # figure plots scores by fine-tuning outbreaks (`<model>@<n>` rows).
     assert "si-finetune-size" not in FIGURES["synthetic"]["si"]
+
+
+def test_trajectories_are_scored_jointly_for_the_ebola_hub_only() -> None:
+    assert JOINT_STUDIES == ("ebola",)
