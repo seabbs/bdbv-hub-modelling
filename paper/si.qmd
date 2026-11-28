@@ -125,7 +125,7 @@ $D$ is capped only by the history, keeping two steps of context before the longe
 Training blocks use the same rule, reading the simulation's releases up to the cut-off.
 In 10% of training blocks we scale $D$ by a factor drawn from Normal(1, 0.05), so the model can handle $D$ set slightly differently.
 The rule is the same for the zero-shot and fine-tuned models.
-<!-- TODO: compare with baselinenowcast's quantile delay rule, truncate_to_quantile (#1279), and cite @Johnson2025. -->
+<!-- TODO: compare with baselinenowcast's quantile delay rule, truncate_to_quantile, and cite @Johnson2025. -->
 
 **Setting $D$ by hand.**
 A user can instead fix $D$ for their setting, and both case studies do so.

@@ -6,7 +6,7 @@ from nowcastfoundation.finetune import realtasks as rt
 
 
 def test_the_lag_jitter_is_the_simulated_blocks():
-    assert rt.LAG_JITTER == (0.1, 0.05)
+    assert rt.lag_jitter() == (0.1, 0.05)
 
 
 def test_a_share_of_blocks_scale_their_lag_count():

@@ -8,7 +8,7 @@ place's lag series and 7-day rows, and the model's views
 (`active_views`, or `block_views` over the block limit). Only the lag
 count differs from a forecast's: the data rule (`lag_count`), scaled in
 a share of blocks by a draw from Normal(1, sd), as the simulated blocks'
-lag jitter (`LAG_JITTER`). Each block's targets after its context hold
+lag jitter (`lag_jitter`). Each block's targets after its context hold
 the truth, a later task's final counts, masked after the truth date, so
 no count trained on is younger than the study's truth delay.
 """
@@ -16,7 +16,8 @@ no count trained on is younger than the study's truth delay.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Final
+from functools import cache
+from typing import Any
 
 import numpy as np
 
@@ -40,14 +41,16 @@ RELEASE_LAYER = (
 """The release layer, whose `lag_jitter` the real blocks' lags take."""
 
 
-def _jitter() -> tuple[float, float]:
+@cache
+def lag_jitter() -> tuple[float, float]:
+    """Return the share of blocks whose lag count is scaled, and the sd.
+
+    The simulated blocks' `lag_jitter`, 10% of blocks by Normal(1, 0.05),
+    read from the release layer on first use rather than on import, as
+    an installed package has no repository to read it from.
+    """
     raw = ft.read_release_layer(RELEASE_LAYER)["lag_jitter"]
     return float(raw["share"]), float(raw["sd"])
-
-
-LAG_JITTER: Final = _jitter()
-"""The share of blocks whose lag count is scaled, and the scale's sd: the
-simulated blocks' `lag_jitter`, 10% of blocks by Normal(1, 0.05)."""
 
 
 BLOCK_LIMIT = 1000
@@ -141,7 +144,7 @@ def task_blocks(
     task: ForecastTask,
     truth: Truth,
     rng: np.random.Generator,
-    jitter: tuple[float, float] = LAG_JITTER,
+    jitter: tuple[float, float] | None = None,
     **labels: Any,
 ) -> list[dict[str, Any]]:
     """Return the training blocks of one task, one per view.
@@ -155,7 +158,7 @@ def task_blocks(
     run = model.for_task(task)
     rows, places, weeks = run._rows(task)
     full = hub_triangle(rows, run.source, places, weeks[-1], all_lags=True)
-    scale = lag_scale(rng, jitter)
+    scale = lag_scale(rng, lag_jitter() if jitter is None else jitter)
     lags = max(1, round(lag_count(full, run.source) * scale))
     run = replace(run, lags=lags)
     tri = run._triangle(rows, places, weeks[-1])
